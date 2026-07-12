@@ -9,7 +9,7 @@ FREE = np.int8(0)
 OCCUPIED = np.int8(1)
 
 
-@dataclass
+@dataclass(eq=False)
 class OccupancyGrid:
     cells: np.ndarray          # int8 [rows, cols] of UNKNOWN / FREE / OCCUPIED
     origin: tuple              # world (x, z) of the corner of cell [0, 0]

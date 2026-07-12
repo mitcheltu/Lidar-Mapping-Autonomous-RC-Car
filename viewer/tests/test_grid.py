@@ -21,6 +21,13 @@ def test_world_to_cell_rows_are_z_cols_are_x():
     assert (row, col) == (7, 3)
 
 
+def test_world_to_cell_before_origin_goes_negative():
+    g = make_grid()
+    # points before the origin map to negative indices (and are out of bounds)
+    assert g.world_to_cell(-1.5, -3.0) == (-20, -10)
+    assert not g.in_bounds(*g.world_to_cell(-1.5, -3.0))
+
+
 def test_cell_to_world_returns_cell_center_and_round_trips():
     g = make_grid()
     x, z = g.cell_to_world(7, 3)
