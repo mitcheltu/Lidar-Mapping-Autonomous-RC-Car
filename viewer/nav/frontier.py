@@ -22,11 +22,15 @@ def nearest_passable(grid, cell, max_radius=12):
 
     The car's own cell can sit inside the inflation ring right after a scan
     (walls near the start), so planning snaps to the nearest legal cell.
+    After a hit, the search keeps expanding into later Chebyshev rings until
+    a ring's minimum possible distance provably cannot beat the best found.
     """
     p = grid.passable()
     r0, c0 = cell
     best, best_d2 = None, None
     for radius in range(max_radius + 1):
+        if best is not None and radius * radius > best_d2:
+            break                     # no later ring can contain a closer cell
         for dr in range(-radius, radius + 1):
             for dc in range(-radius, radius + 1):
                 if max(abs(dr), abs(dc)) != radius:
@@ -36,9 +40,7 @@ def nearest_passable(grid, cell, max_radius=12):
                     d2 = dr * dr + dc * dc
                     if best is None or d2 < best_d2:
                         best, best_d2 = (r, c), d2
-        if best is not None:
-            return best
-    return None
+    return best
 
 
 def bfs_distances(grid, start):

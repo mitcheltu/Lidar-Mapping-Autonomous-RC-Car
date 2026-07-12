@@ -34,6 +34,14 @@ def test_nearest_passable_snaps_out_of_inflation():
     assert not g.blocked[nearest_passable(g, (5, 5))]
 
 
+def test_nearest_passable_finds_closer_cell_in_later_ring():
+    g = open_grid(41, 41)
+    g.blocked[:, :] = True
+    g.blocked[23, 23] = False   # ring-3 diagonal corner from (20,20), d2 = 18
+    g.blocked[20, 24] = False   # ring-4 axis cell, d2 = 16 -- strictly closer
+    assert nearest_passable(g, (20, 20)) == (20, 24)
+
+
 def test_bfs_goes_around_walls():
     g = open_grid()
     g.cells[0:19, 10] = OCCUPIED          # wall with a gap at the bottom
