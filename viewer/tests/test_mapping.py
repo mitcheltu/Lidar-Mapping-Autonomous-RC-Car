@@ -29,3 +29,28 @@ def test_clean_cloud_passes_tiny_clouds_through():
     tiny = np.random.rand(10, 3).astype(np.float32)
     out = clean_cloud(tiny)
     assert out.shape == (10, 3)
+
+
+from nav.mapping import estimate_floor_height
+
+
+def room_with_table(floor_y=-1.4):
+    """Floor plus a smaller 'table top' plane 0.7 m above it."""
+    floor = dense_plane(n_side=60, y=floor_y)
+    table = dense_plane(n_side=20, y=floor_y + 0.7)
+    rng = np.random.default_rng(0)
+    noise = np.stack([rng.uniform(0, 1.2, 40),
+                      rng.uniform(floor_y, floor_y + 1.0, 40),
+                      rng.uniform(0, 1.2, 40)], axis=1).astype(np.float32)
+    return np.vstack([floor, table, noise])
+
+
+def test_floor_is_lowest_dominant_plane_not_the_table():
+    pts = room_with_table(floor_y=-1.4)
+    assert abs(estimate_floor_height(pts) - (-1.4)) < 0.05
+
+
+def test_floor_ignores_sparse_low_noise():
+    pts = room_with_table(floor_y=0.0)
+    low_specks = np.array([[0.1, -0.9, 0.1], [0.9, -0.8, 0.9]], dtype=np.float32)
+    assert abs(estimate_floor_height(np.vstack([pts, low_specks]))) < 0.05
