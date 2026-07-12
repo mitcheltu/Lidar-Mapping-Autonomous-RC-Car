@@ -13,7 +13,9 @@ def clean_cloud(xyz, voxel_size=0.04, nb_neighbors=20, std_ratio=2.0,
 
     Returns an [N, 3] float32 array. Clouds under 50 points pass through
     untouched (not enough neighbors for the statistics to mean anything).
+    Non-finite points are dropped first.
     """
+    xyz = xyz[np.isfinite(xyz).all(axis=1)]
     if xyz.shape[0] < 50:
         return xyz.astype(np.float32)
     pcd = o3d.geometry.PointCloud()
@@ -32,6 +34,8 @@ def estimate_floor_height(xyz, bin_size=0.02, min_fraction=0.20):
     least `min_fraction` of the largest bin, so sparse below-floor noise is
     skipped but a big table can't win just by having more points.
     """
+    if xyz.shape[0] == 0:
+        raise ValueError("empty cloud -- cannot estimate floor height")
     ys = xyz[:, 1]
     lo, hi = np.percentile(ys, [1, 99])
     edges = np.arange(lo, hi + bin_size, bin_size)

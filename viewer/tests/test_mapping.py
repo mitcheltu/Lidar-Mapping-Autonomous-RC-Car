@@ -98,3 +98,16 @@ def test_inflation_blocks_a_ring_around_obstacles():
 def test_grid_raises_on_empty_band():
     with pytest.raises(ValueError):
         build_occupancy_grid(np.zeros((0, 3), np.float32), floor_y=0.0)
+
+
+def test_clean_cloud_drops_nonfinite_points():
+    floor = dense_plane()
+    bad = np.array([[np.nan, 0.0, 0.0], [0.0, np.inf, 0.0]], dtype=np.float32)
+    cleaned = clean_cloud(np.vstack([floor, bad]), voxel_size=0.04)
+    assert np.isfinite(cleaned).all()
+    assert cleaned.shape[0] > 100
+
+
+def test_floor_height_raises_on_empty_cloud():
+    with pytest.raises(ValueError):
+        estimate_floor_height(np.zeros((0, 3), np.float32))
