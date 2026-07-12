@@ -44,7 +44,10 @@ def nearest_passable(grid, cell, max_radius=12):
 
 
 def bfs_distances(grid, start):
-    """Steps from `start` to every passable cell (8-connected); inf if unreachable."""
+    """Steps from `start` to every passable cell (8-connected); inf if unreachable.
+
+    Diagonal steps obey planner.astar's no-corner-cutting rule, so
+    BFS-reachable implies A*-reachable."""
     passable = grid.passable()
     dist = np.full(grid.shape, np.inf)
     if not grid.in_bounds(*start) or not passable[start]:
@@ -58,9 +61,12 @@ def bfs_distances(grid, start):
                 if dr == 0 and dc == 0:
                     continue
                 n = (r + dr, c + dc)
-                if grid.in_bounds(*n) and passable[n] and not np.isfinite(dist[n]):
-                    dist[n] = dist[r, c] + 1
-                    q.append(n)
+                if not grid.in_bounds(*n) or not passable[n] or np.isfinite(dist[n]):
+                    continue
+                if dr != 0 and dc != 0 and not (passable[r + dr, c] and passable[r, c + dc]):
+                    continue          # same no-corner-cutting rule as planner.astar
+                dist[n] = dist[r, c] + 1
+                q.append(n)
     return dist
 
 

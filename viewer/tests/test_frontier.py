@@ -51,6 +51,14 @@ def test_bfs_goes_around_walls():
     assert dist[0, 15] > 20               # but much farther than straight-line
 
 
+def test_bfs_respects_no_corner_cutting():
+    g = open_grid(3, 3)
+    g.blocked[0, 1] = True
+    g.blocked[1, 0] = True
+    dist = bfs_distances(g, (0, 0))
+    assert not np.isfinite(dist[1, 1])   # the only route is the forbidden squeeze
+
+
 def test_choose_goal_prefers_reachable_frontier():
     g = open_grid()
     g.cells[:, 15:] = UNKNOWN             # frontier on the right
