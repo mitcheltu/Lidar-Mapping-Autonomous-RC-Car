@@ -2746,6 +2746,7 @@ git commit -m "chore: calibrate TURN_SIGN for this chassis"
 
 - Task order within a milestone matters (later tasks import earlier modules); Milestone A can be executed before Tasks 9–14 exist.
 - The ESP32 firmware is deliberately untouched: its command grammar (`L..R..`) and 0.5 s failsafe are already exactly what the stack needs.
+- **Known follow-up for Milestone B (from Milestone A code review):** the pure-Python `bfs_distances` costs ~0.2 s on a typical 100×100-cell room but ~4.7 s worst-case on a fully-open 400×400 grid. Fine for the 2-second preview cadence in normal rooms; before wiring `Explorer._plan` into the live viewer loop (Task 10/16), either vectorize the BFS (iterative masked dilation wavefront) or run planning off the render thread.
 
 
 
