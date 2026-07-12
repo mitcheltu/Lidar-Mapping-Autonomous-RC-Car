@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from nav.mapping import clean_cloud
 
@@ -54,3 +55,46 @@ def test_floor_ignores_sparse_low_noise():
     pts = room_with_table(floor_y=0.0)
     low_specks = np.array([[0.1, -0.9, 0.1], [0.9, -0.8, 0.9]], dtype=np.float32)
     assert abs(estimate_floor_height(np.vstack([pts, low_specks]))) < 0.05
+
+
+from nav.grid import FREE, OCCUPIED, UNKNOWN
+from nav.mapping import build_occupancy_grid, inflate
+
+
+def box_room(floor_y=0.0, size=2.0, spacing=0.025):
+    """Floor with a 0.3 m box obstacle at the center, plus an overhang to ignore."""
+    n = int(size / spacing)
+    floor = dense_plane(n_side=n, spacing=spacing, y=floor_y)
+    bx, bz = np.meshgrid(np.arange(0.9, 1.1, spacing), np.arange(0.9, 1.1, spacing))
+    box = []
+    for h in (0.10, 0.20, 0.30):                    # box within robot height
+        box.append(np.stack([bx.ravel(), np.full(bx.size, floor_y + h),
+                             bz.ravel()], axis=1))
+    # a 'shelf' 1 m up over x=0.2..0.4 -- too high to matter, must be ignored
+    sx, sz = np.meshgrid(np.arange(0.2, 0.4, spacing), np.arange(0.2, 0.4, spacing))
+    shelf = np.stack([sx.ravel(), np.full(sx.size, floor_y + 1.0), sz.ravel()], axis=1)
+    return np.vstack([floor] + box + [shelf]).astype(np.float32)
+
+
+def test_grid_classifies_free_occupied_unknown():
+    pts = box_room()
+    g = build_occupancy_grid(pts, floor_y=0.0, cell_size=0.05)
+    assert g.cells[g.world_to_cell(1.0, 1.0)] == OCCUPIED   # the box
+    assert g.cells[g.world_to_cell(0.3, 1.5)] == FREE       # open floor
+    assert g.cells[g.world_to_cell(0.3, 0.3)] == FREE       # under the high shelf
+    assert g.cells[g.world_to_cell(-0.4, -0.4)] == UNKNOWN  # outside scanned area
+
+
+def test_inflation_blocks_a_ring_around_obstacles():
+    pts = box_room()
+    g = inflate(build_occupancy_grid(pts, floor_y=0.0, cell_size=0.05),
+                robot_radius=0.12)
+    assert g.blocked[g.world_to_cell(1.0, 1.0)]             # obstacle itself
+    assert g.blocked[g.world_to_cell(1.0, 0.82)]            # within 0.12 m of box
+    assert not g.blocked[g.world_to_cell(1.0, 0.5)]         # well clear of it
+    assert g.passable()[g.world_to_cell(1.0, 0.5)]
+
+
+def test_grid_raises_on_empty_band():
+    with pytest.raises(ValueError):
+        build_occupancy_grid(np.zeros((0, 3), np.float32), floor_y=0.0)
