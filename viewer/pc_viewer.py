@@ -28,7 +28,7 @@ Then type THIS computer's LAN IP into the app and tap "Stream".
     macOS   : ipconfig getifaddr en0
 Both devices on the SAME Wi-Fi. On Windows, allow Python through the firewall.
 
-Keys (focus the camera window): S = save PLY now,  ESC = quit (also saves).
+Keys (focus the camera window): S = save PLY, G = toggle map preview, ESC = quit (also saves).
 Reload a saved session later:  np.fromfile("points_log.f32", "<f4").reshape(-1, 6)
                                columns = x, y, z, r, g, b   (rgb 0..1)
 ------------------------------------------------------------------
@@ -44,6 +44,10 @@ from datetime import datetime
 import numpy as np
 import open3d as o3d
 import cv2
+
+from nav.localization import pose_from_streamed, pose_to_2d
+from nav.overlay import grid_overlay, path_overlay
+from nav.preview import preview_plan
 
 HOST = "0.0.0.0"
 PORT = 9000
@@ -145,6 +149,13 @@ def main():
 
     threading.Thread(target=receiver, daemon=True).start()
 
+    nav_grid_pcd = o3d.geometry.PointCloud()
+    nav_path_lines = o3d.geometry.LineSet()
+    nav_grid_added = False
+    nav_path_added = False
+    preview_on = False
+    last_preview = 0.0
+
     # Full-resolution store (kept for disk saves; never downsampled).
     store_xyz = np.zeros((0, 3), np.float32)
     store_rgb = np.zeros((0, 3), np.float32)
@@ -175,6 +186,29 @@ def main():
         cloud.colors = o3d.utility.Vector3dVector(store_rgb.astype(np.float64))
         o3d.io.write_point_cloud(ply_path, cloud)
         print(f"[viewer] saved {store_xyz.shape[0]} points -> {ply_path}")
+
+    def update_nav_overlay(grid, floor_y, path_world):
+        nonlocal nav_grid_added, nav_path_added
+        if grid is None:
+            return
+        gpts, gcol = grid_overlay(grid, floor_y)
+        nav_grid_pcd.points = o3d.utility.Vector3dVector(gpts)
+        nav_grid_pcd.colors = o3d.utility.Vector3dVector(gcol)
+        if not nav_grid_added:
+            vis.add_geometry(nav_grid_pcd, reset_bounding_box=False)
+            nav_grid_added = True
+        else:
+            vis.update_geometry(nav_grid_pcd)
+        ppts, plines = path_overlay(path_world, floor_y)
+        if len(ppts) >= 2:
+            nav_path_lines.points = o3d.utility.Vector3dVector(ppts)
+            nav_path_lines.lines = o3d.utility.Vector2iVector(plines)
+            nav_path_lines.paint_uniform_color([0.2, 0.5, 1.0])
+            if not nav_path_added:
+                vis.add_geometry(nav_path_lines, reset_bounding_box=False)
+                nav_path_added = True
+            else:
+                vis.update_geometry(nav_path_lines)
 
     try:
         while True:
@@ -237,6 +271,12 @@ def main():
                 else:
                     vis.update_geometry(marker)
 
+            # --- walkthrough map preview (toggle with 'G') ---
+            if preview_on and pose_vals is not None and time.time() - last_preview > 2.0:
+                last_preview = time.time()
+                res = preview_plan(store_xyz, pose_to_2d(pose_from_streamed(pose_vals)))
+                update_nav_overlay(res.grid, res.floor_y, res.path_world)
+
             if not vis.poll_events():
                 break
             vis.update_renderer()
@@ -251,6 +291,9 @@ def main():
             key = cv2.waitKey(1) & 0xFF
             if key == ord('s'):
                 save_ply()
+            elif key == ord('g'):
+                preview_on = not preview_on
+                print(f"[viewer] map preview {'ON' if preview_on else 'OFF'}")
             elif key == 27:  # ESC
                 break
 
