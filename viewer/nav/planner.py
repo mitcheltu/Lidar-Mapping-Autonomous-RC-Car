@@ -3,8 +3,6 @@
 import heapq
 import math
 
-import numpy as np
-
 SQRT2 = math.sqrt(2.0)
 
 
@@ -60,12 +58,30 @@ def astar(passable, start, goal):
 
 
 def line_clear(passable, a, b):
-    """True if the straight segment a->b stays on passable cells (dense sampling
-    at half-cell resolution, so it cannot skip over a blocked cell)."""
-    steps = int(max(abs(b[0] - a[0]), abs(b[1] - a[1]))) * 2 + 1
-    for t in np.linspace(0.0, 1.0, steps + 1):
-        r = int(round(a[0] + (b[0] - a[0]) * t))
-        c = int(round(a[1] + (b[1] - a[1]) * t))
+    """True if a straight center-to-center run from cell a to cell b is legal:
+    every cell the segment crosses is passable, and passing exactly through a
+    cell corner obeys the same no-corner-cutting rule as astar (both flanking
+    cells must be passable)."""
+    (r0, c0), (r1, c1) = a, b
+    adr, adc = abs(r1 - r0), abs(c1 - c0)
+    sr = 1 if r1 >= r0 else -1
+    sc = 1 if c1 >= c0 else -1
+    r, c = r0, c0
+    if not passable[r, c]:
+        return False
+    n_r = n_c = 0                     # cell boundaries crossed so far, per axis
+    while n_r < adr or n_c < adc:
+        # parametric position of the next boundary crossing on each axis
+        t_r = (n_r + 0.5) / adr if adr else 2.0
+        t_c = (n_c + 0.5) / adc if adc else 2.0
+        if abs(t_r - t_c) < 1e-12:    # exact corner: diagonal transition
+            if not (passable[r + sr, c] and passable[r, c + sc]):
+                return False          # no corner cutting
+            r += sr; c += sc; n_r += 1; n_c += 1
+        elif t_r < t_c:
+            r += sr; n_r += 1
+        else:
+            c += sc; n_c += 1
         if not passable[r, c]:
             return False
     return True

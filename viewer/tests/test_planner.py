@@ -43,6 +43,32 @@ def test_line_clear_sees_blockers():
     assert not line_clear(p, (0, 0), (10, 10))
 
 
+def test_line_clear_refuses_corner_cutting_like_astar():
+    p = open_map(3, 3)
+    p[0, 1] = p[1, 0] = False
+    assert not line_clear(p, (0, 0), (1, 1))
+
+
+def test_astar_diagonal_forbidden_with_single_blocked_flank():
+    p = open_map(3, 3)
+    p[0, 1] = False                       # only ONE flanking cell blocked
+    path = astar(p, (0, 0), (2, 2))
+    assert path is not None
+    assert (path[0], path[1]) != ((0, 0), (1, 1))   # may not squeeze past the flank
+
+
+def test_simplify_never_reintroduces_forbidden_corners():
+    p = open_map(12, 12)
+    p[5, 6] = False
+    p[6, 5] = False
+    path = astar(p, (0, 0), (11, 11))
+    assert path is not None
+    for a, b in zip(simplify_path(path, p), simplify_path(path, p)[1:]):
+        assert line_clear(p, a, b)
+    # the straight diagonal cuts the (5,6)/(6,5) corner: must NOT be a legal leg
+    assert not line_clear(p, (0, 0), (11, 11))
+
+
 def test_simplify_collapses_collinear_and_keeps_corners():
     p = open_map()
     p[0:15, 10] = False
