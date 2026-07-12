@@ -37,3 +37,9 @@ def test_path_overlay_builds_line_segments():
 def test_path_overlay_empty():
     pts, lines = path_overlay([], floor_y=0.0)
     assert pts.shape == (0, 3) and lines.shape == (0, 2)
+
+
+def test_path_overlay_single_point_keeps_line_shape():
+    pts, lines = path_overlay([(1.0, 2.0)], floor_y=0.0)
+    assert pts.shape == (1, 3)
+    assert lines.shape == (0, 2)

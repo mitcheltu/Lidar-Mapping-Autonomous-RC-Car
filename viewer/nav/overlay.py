@@ -30,5 +30,6 @@ def path_overlay(path_world, floor_y):
     if not path_world:
         return np.zeros((0, 3)), np.zeros((0, 2), dtype=np.int32)
     pts = np.array([[x, floor_y + 0.03, z] for x, z in path_world])
-    lines = np.array([[i, i + 1] for i in range(len(pts) - 1)], dtype=np.int32)
+    lines = np.array([[i, i + 1] for i in range(len(pts) - 1)],
+                     dtype=np.int32).reshape(-1, 2)
     return pts, lines

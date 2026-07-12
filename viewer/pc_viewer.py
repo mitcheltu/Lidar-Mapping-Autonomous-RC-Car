@@ -55,6 +55,7 @@ PORT = 9000
 AUTOSAVE_SECONDS = 15.0       # how often to write map.ply
 RENDER_MAX = 500_000          # above this, the *displayed* cloud is downsampled
 RENDER_REBUILD_SEC = 1.0      # how often to rebuild the displayed cloud when large
+PREVIEW_MAX_POINTS = 400_000      # stride-subsample bigger clouds before preview
 MARKER_SIZE = 0.30            # size of the phone-pose axes, meters
 
 # If the camera feed looks sideways, set to cv2.ROTATE_90_CLOCKWISE, etc. None = off.
@@ -209,6 +210,10 @@ def main():
                 nav_path_added = True
             else:
                 vis.update_geometry(nav_path_lines)
+        elif nav_path_added:
+            nav_path_lines.points = o3d.utility.Vector3dVector(np.zeros((0, 3)))
+            nav_path_lines.lines = o3d.utility.Vector2iVector(np.zeros((0, 2), dtype=np.int32))
+            vis.update_geometry(nav_path_lines)
 
     try:
         while True:
@@ -274,7 +279,10 @@ def main():
             # --- walkthrough map preview (toggle with 'G') ---
             if preview_on and pose_vals is not None and time.time() - last_preview > 2.0:
                 last_preview = time.time()
-                res = preview_plan(store_xyz, pose_to_2d(pose_from_streamed(pose_vals)))
+                cloud = store_xyz
+                if cloud.shape[0] > PREVIEW_MAX_POINTS:
+                    cloud = cloud[::cloud.shape[0] // PREVIEW_MAX_POINTS + 1]
+                res = preview_plan(cloud, pose_to_2d(pose_from_streamed(pose_vals)))
                 update_nav_overlay(res.grid, res.floor_y, res.path_world)
 
             if not vis.poll_events():
