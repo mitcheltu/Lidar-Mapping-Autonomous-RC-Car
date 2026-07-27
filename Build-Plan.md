@@ -170,7 +170,7 @@ underneath. (Kits include the screws and a diagram.)
 **B. Mount the electronics.** Stick the ESP32 and the L298N on the top plate with
 double-sided foam tape or a small breadboard. Leave room for the phone cradle.
 
-**C. Wire it** (matches the pins in `firmware/esp32_car.ino`):
+**C. Wire it** (matches the pins in `autonomous_rc_car/esp32_firmware/src/esp32_car.ino`):
 
 ```
 Battery (+6–8V) ──► L298N  12V  in
@@ -200,7 +200,7 @@ Notes for a first-timer:
   (7.4 V) or a TB6612 driver fixes this.
 
 **D. Flash the ESP32.** In the Arduino IDE, add ESP32 boards (Boards Manager →
-"esp32"), open `firmware/esp32_car.ino`, select your board, and Upload. Open the
+"esp32"), open `autonomous_rc_car/esp32_firmware/src/esp32_car.ino`, select your board, and Upload. Open the
 Serial Monitor at 115200; you should see `BLE robot car ready.`
 
 **E. Smoke-test the link.** Before autonomy, prove BLE works. Either build the
@@ -219,16 +219,16 @@ unobstructed.
 
 Two pieces live in this project:
 
-**`PointCloudScanner/` — the perception app.** SwiftUI + ARKit. Wave the phone
+**`autonomous_rc_car/ios_app/RCCarLidarStreamer/` — the perception app.** SwiftUI + ARKit. Wave the phone
 and it accumulates a colored 3D point cloud from the LiDAR, shows it live, and
-exports `.PLY`. Setup instructions are in `PointCloudScanner/README.md`. This is
+exports `.PLY`. Setup instructions are in `autonomous_rc_car/ios_app/RCCarLidarStreamer/README.md`. This is
 your mapping tool and the foundation for on-robot perception.
 
-**`firmware/esp32_car.ino` — the motor controller.** BLE server that accepts
+**`autonomous_rc_car/esp32_firmware/src/esp32_car.ino` — the motor controller.** BLE server that accepts
 `L<left>R<right>` speed commands (−100…100) and drives the H-bridge with PWM,
 with a motion failsafe.
 
-**`PointCloudScanner/CarController.swift` — the bridge.** iOS BLE client that
+**`autonomous_rc_car/ios_app/RCCarLidarStreamer/CarController.swift` — the bridge.** iOS BLE client that
 finds the ESP32, connects, and exposes `drive(left:right:)` / `stop()`. The UUIDs
 already match the firmware.
 

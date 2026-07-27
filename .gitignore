@@ -1,6 +1,27 @@
+# Python
 __pycache__/
 *.pyc
 .pytest_cache/
-viewer/captures/
-viewer/DepthCamera_*.json
-viewer/DepthCapture_*.png
+
+# Virtual environments
+.venv/
+.venv312/
+venv/
+env/
+
+# Recorded capture sessions (large point-cloud logs)
+autonomous_rc_car/laptop_brain/captures/
+*.f32
+
+# Scratch / temp artifacts
+autonomous_rc_car/laptop_brain/tmp_*
+*.ply
+
+# Stray depth exports
+autonomous_rc_car/laptop_brain/DepthCamera_*.json
+autonomous_rc_car/laptop_brain/DepthCapture_*.png
+
+# ROS2 build artifacts (Phase 1+)
+build/
+install/
+log/

@@ -1,11 +1,11 @@
-# PointCloudScanner (iPhone 12 Pro Max LiDAR)
+# RCCarLidarStreamer (iPhone 12 Pro Max LiDAR)
 
 A SwiftUI + ARKit app that builds a colored 3D point cloud from your phone's
 LiDAR as you wave it around, shows it live over the camera feed, and exports a
 `.PLY` file you can open in MeshLab, CloudCompare, or Blender.
 
 It also ships with `CarController.swift`, a BLE bridge to the ESP32 robot (see
-`../firmware/esp32_car.ino`), so this one project covers both perception and,
+`../../esp32_firmware/src/esp32_car.ino`), so this one project covers both perception and,
 later, driving.
 
 ## Requirements
@@ -16,7 +16,7 @@ later, driving.
 
 ## Create the Xcode project (5 minutes)
 
-1. Xcode → **File ▸ New ▸ Project… ▸ App**. Product name `PointCloudScanner`,
+1. Xcode → **File ▸ New ▸ Project… ▸ App**. Product name `RCCarLidarStreamer`,
    Interface **SwiftUI**, Language **Swift**.
 2. Delete the auto-generated `ContentView.swift` and `*App.swift`, then drag
    these files into the project (check "Copy items if needed"):
@@ -68,7 +68,7 @@ build in real time (and see the robot's camera) on a big screen — with **no
 
 ```
 python -m pip install open3d numpy opencv-python
-python viewer/pc_viewer.py
+python autonomous_rc_car/laptop_brain/pc_viewer.py
 ```
 
 Find the computer's LAN IP — Windows `ipconfig`, Mac `ipconfig getifaddr en0` —

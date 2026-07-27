@@ -1,0 +1,3 @@
+# Placeholder KISS-ICP configuration for future point-cloud registration.
+voxel_size: 0.03
+max_correspondence_distance: 0.2

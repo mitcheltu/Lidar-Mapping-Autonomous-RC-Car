@@ -1,0 +1,3 @@
+# Placeholder Nav2 configuration for future autonomous navigation.
+planner:
+  default_planner: navfn

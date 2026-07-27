@@ -46,8 +46,8 @@ import open3d as o3d
 import cv2
 
 from nav.localization import pose_from_streamed, pose_to_2d
-from nav.overlay import grid_overlay, path_overlay
 from nav.preview import preview_plan
+from nav.voxel_viewer import build_overlay_geometry, prepare_point_cloud_geometry
 
 HOST = "0.0.0.0"
 PORT = 9000
@@ -192,7 +192,7 @@ def main():
         nonlocal nav_grid_added, nav_path_added
         if grid is None:
             return
-        gpts, gcol = grid_overlay(grid, floor_y)
+        gpts, gcol, ppts, plines = build_overlay_geometry(grid, floor_y, path_world)
         nav_grid_pcd.points = o3d.utility.Vector3dVector(gpts)
         nav_grid_pcd.colors = o3d.utility.Vector3dVector(gcol)
         if not nav_grid_added:
@@ -200,7 +200,6 @@ def main():
             nav_grid_added = True
         else:
             vis.update_geometry(nav_grid_pcd)
-        ppts, plines = path_overlay(path_world, floor_y)
         if len(ppts) >= 2:
             nav_path_lines.points = o3d.utility.Vector3dVector(ppts)
             nav_path_lines.lines = o3d.utility.Vector2iVector(plines)
@@ -239,14 +238,10 @@ def main():
             if batch and (store_xyz.shape[0] <= RENDER_MAX or now - last_render_build > RENDER_REBUILD_SEC):
                 last_render_build = now
                 if store_xyz.shape[0] > RENDER_MAX:
-                    tmp = o3d.geometry.PointCloud()
-                    tmp.points = o3d.utility.Vector3dVector(store_xyz.astype(np.float64))
-                    tmp.colors = o3d.utility.Vector3dVector(store_rgb.astype(np.float64))
-                    tmp = tmp.voxel_down_sample(voxel_size=0.02)
+                    tmp = prepare_point_cloud_geometry(store_xyz, store_rgb, max_points=RENDER_MAX, voxel_size=0.02)
                     pcd.points, pcd.colors = tmp.points, tmp.colors
                 else:
-                    pcd.points = o3d.utility.Vector3dVector(store_xyz.astype(np.float64))
-                    pcd.colors = o3d.utility.Vector3dVector(store_rgb.astype(np.float64))
+                    pcd = prepare_point_cloud_geometry(store_xyz, store_rgb, max_points=store_xyz.shape[0], voxel_size=0.02)
                 if not pcd_added:
                     vis.add_geometry(pcd)
                     vis.reset_view_point(True)
