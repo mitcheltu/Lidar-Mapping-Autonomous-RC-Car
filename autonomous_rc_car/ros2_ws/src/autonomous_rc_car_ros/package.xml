@@ -19,6 +19,7 @@
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>visualization_msgs</depend>
 
   <!--
     NOTE: the pure-Python algorithm library `nav` (autonomous_rc_car/laptop_brain)

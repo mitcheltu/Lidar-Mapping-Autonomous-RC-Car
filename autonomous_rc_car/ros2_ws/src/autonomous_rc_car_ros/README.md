@@ -17,9 +17,11 @@ are thin wrappers around it.
   relays it back over the socket to the phone/ESP32.
 - `voxel_mapper_node` (real): accumulates `/points`, on a timer runs `nav.mapping`
   (clean -> floor -> build_occupancy_grid -> inflate) and publishes `/map`
-  (nav_msgs/OccupancyGrid) plus categorized voxel layers `/voxels/ground` and
-  `/voxels/obstacle` (PointCloud2). Params: `rebuild_period`, `cell_size`,
-  `robot_radius`, `min_points`, `max_points`.
+  (nav_msgs/OccupancyGrid) plus true 3D voxel layers `/voxels/ground` and
+  `/voxels/obstacle` (visualization_msgs/MarkerArray, CUBE_LIST — a cube of edge
+  `voxel_size` wherever enough LiDAR hits land). Params: `rebuild_period`,
+  `cell_size`, `robot_radius`, `voxel_size`, `min_points_obstacle`, `min_points`,
+  `max_points`.
 - `frontier_planner_node` (stub): `/map` -> `/cmd_path` (nav_msgs/Path) via
   `nav.frontier.choose_goal` + `nav.planner.astar` / `simplify_path`.
 - `motion_controller_node` (stub): `/cmd_path` + `/pose` -> `/drive` (String,
@@ -58,14 +60,15 @@ With `bridge_node` + `voxel_mapper_node` running and the phone streaming, set
 **Fixed Frame = `map`**, then **Add** these displays (each has its own visibility
 checkbox):
 
-| Display | Topic | Suggested style |
+| Display | Topic | Notes |
 |---|---|---|
-| Map | `/map` | costmap scheme (free/occupied/unknown) |
-| PointCloud2 | `/voxels/ground` | flat color, green |
-| PointCloud2 | `/voxels/obstacle` | flat color, red |
-| PointCloud2 | `/points` | raw cloud, white / RGB |
+| Map | `/map` | 2D costmap (free/occupied/unknown) the planner drives on |
+| **MarkerArray** | `/voxels/ground` | green voxel **cubes** (drivable floor) |
+| **MarkerArray** | `/voxels/obstacle` | red voxel **cubes** (obstacles) |
+| PointCloud2 | `/points` | raw cloud, white / RGB (context) |
 | Pose | `/pose` | phone position + heading |
 
-Toggle `/voxels/ground` vs `/voxels/obstacle` to inspect the height-band
-classification; `/map` shows the free/inflated/occupied grid the planner uses.
+The `/voxels/*` layers are actual cubes (edge `voxel_size`, default 0.03 m), not
+points — toggle `/voxels/ground` vs `/voxels/obstacle` to inspect the height-band
+classification; `/map` is the 2D grid the planner uses.
 (A saved `.rviz` config can be added later once verified against a live build.)
