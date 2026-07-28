@@ -1,10 +1,14 @@
 import numpy as np
 
+import math
+
 from nav.frames import (
     A,
     points_arkit_to_ros,
     points_ros_to_arkit,
+    quaternion_to_matrix,
     rotation_arkit_to_ros,
+    rotation_ros_to_arkit,
 )
 
 
@@ -40,3 +44,20 @@ def test_rotation_identity_and_validity():
     R = rotation_arkit_to_ros(A)                 # arbitrary valid rotation in
     assert np.allclose(R @ R.T, np.eye(3))       # -> still orthonormal
     assert np.isclose(np.linalg.det(R), 1.0)
+
+
+def test_rotation_ros_to_arkit_is_inverse():
+    rng = np.random.default_rng(1)
+    # a random proper rotation via QR
+    q, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+    if np.linalg.det(q) < 0:
+        q[:, 0] = -q[:, 0]
+    assert np.allclose(rotation_ros_to_arkit(rotation_arkit_to_ros(q)), q)
+
+
+def test_quaternion_identity_and_90deg():
+    assert np.allclose(quaternion_to_matrix(0, 0, 0, 1), np.eye(3))
+    # +90 deg about z maps +x -> +y
+    s = math.sin(math.pi / 4)
+    R = quaternion_to_matrix(0, 0, s, s)
+    assert np.allclose(R @ [1, 0, 0], [0, 1, 0], atol=1e-9)

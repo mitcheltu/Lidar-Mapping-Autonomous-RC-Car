@@ -45,3 +45,23 @@ def rotation_arkit_to_ros(R):
     """Re-express a 3x3 orientation from the ARKit frame in the ROS frame."""
     R = np.asarray(R, dtype=np.float64)
     return A @ R @ A.T
+
+
+def rotation_ros_to_arkit(R):
+    """Re-express a 3x3 orientation from the ROS frame back in the ARKit frame."""
+    R = np.asarray(R, dtype=np.float64)
+    return A.T @ R @ A
+
+
+def quaternion_to_matrix(qx, qy, qz, qw):
+    """Unit quaternion (x, y, z, w) -> 3x3 rotation matrix."""
+    q = np.array([qx, qy, qz, qw], dtype=np.float64)
+    n = np.linalg.norm(q)
+    if n == 0.0:
+        return np.eye(3)
+    x, y, z, w = q / n
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w),     2 * (x * z + y * w)],
+        [2 * (x * y + z * w),     1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w),     2 * (y * z + x * w),     1 - 2 * (x * x + y * y)],
+    ], dtype=np.float64)
