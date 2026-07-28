@@ -6,9 +6,9 @@ the mapping / planning / control / SLAM nodes. The heavy algorithms live in the
 pip-installable `nav` library (`autonomous_rc_car/laptop_brain`); the ROS nodes
 are thin wrappers around it.
 
-> Implemented: `bridge_node`, `voxel_mapper_node`. Still **stubs** (warn on startup,
-> wire up topics, no real work yet): `frontier_planner_node`, `motion_controller_node`,
-> `icp_slam_node`.
+> Implemented: `bridge_node`, `voxel_mapper_node`, `frontier_planner_node`. Still
+> **stubs** (warn on startup, wire up topics, no real work yet):
+> `motion_controller_node`, `icp_slam_node`.
 
 ## Topic graph
 
@@ -22,8 +22,10 @@ are thin wrappers around it.
   `voxel_size` wherever enough LiDAR hits land). Params: `rebuild_period`,
   `cell_size`, `robot_radius`, `voxel_size`, `min_points_obstacle`, `min_points`,
   `max_points`.
-- `frontier_planner_node` (stub): `/map` -> `/cmd_path` (nav_msgs/Path) via
-  `nav.frontier.choose_goal` + `nav.planner.astar` / `simplify_path`.
+- `frontier_planner_node` (real): `/map` + `/pose` -> `/cmd_path` (nav_msgs/Path).
+  Rebuilds the nav grid, locates the car cell, picks the nearest reachable frontier
+  (`nav.frontier.choose_goal`) and plans an A* + line-of-sight path
+  (`nav.planner.astar` / `simplify_path`). Empty path = exploration complete.
 - `motion_controller_node` (stub): `/cmd_path` + `/pose` -> `/drive` (String,
   `"L..R.."`) via pure-pursuit over `nav.localization.pose_to_2d`.
 - `icp_slam_node` (stub): `/points` + `/pose` -> `/pose_corrected` (PoseStamped)

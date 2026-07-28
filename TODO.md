@@ -101,8 +101,10 @@ on recorded data → planning+control → iOS reverse channel → build car → 
         `/voxels/ground` & `/voxels/obstacle` (PointCloud2). Logic in the ROS-free,
         unit-tested `nav/ros_export.py` (`grid_to_occupancy`, `categorize_points`).
         **Needs colcon build + runtime check in WSL2.**
-  - [ ] `frontier_planner_node` — subscribe `/map`, call `nav.frontier` +
-        `nav.planner`, publish `/cmd_path`. (Or delegate to Nav2 — see Phase 3.)
+  - [x] `frontier_planner_node` — **implemented.** On each `/map`, rebuilds the nav
+        grid (`nav.ros_export.occupancy_to_grid`), locates the car from `/pose`, runs
+        `nav.frontier.choose_goal` + `nav.planner.astar`/`simplify_path`, publishes a
+        Z-up `/cmd_path`. **Needs colcon build + runtime check in WSL2.**
   - [ ] `motion_controller` — subscribe `/cmd_path` `/pose_corrected`, run
         pure-pursuit/waypoint follow, publish `/drive`.
   - [ ] `icp_slam_node` — subscribe `/points` `/pose`, run KISS-ICP scan-to-map,
@@ -122,13 +124,19 @@ on recorded data → planning+control → iOS reverse channel → build car → 
       recorded walkthrough (compare raw vs corrected trajectory).
 - [ ] Point `pc_viewer.py` at the ROS2 topics (or keep it on the raw stream) and
       overlay `/map` + `/cmd_path`. Move the preview off the GUI thread.
-- [~] **Categorized voxel viewer ("see the voxels": occupied / ground / free).**
-      `voxel_mapper_node` now publishes the layers; **RViz2** toggles them per-topic
-      (workflow documented in the package README). Remaining: save a verified `.rviz`
-      config once built in WSL2. Fallback: the custom PyVista/PyQt6 GUI from
-      `autonomous_rc_car/README.md` §6 only if an embeddable non-ROS viewer is wanted.
-      *(Today's `pc_viewer.py` G-preview shows only the 2D grid: green=free / amber=
-      inflation / red=obstacle — not per-category 3D voxel layers.)*
+- [x] **Categorized voxel viewer ("see the voxels").** `voxel_mapper_node` publishes
+      true 3D voxel **cubes** (`MarkerArray`/`CUBE_LIST`) for ground/obstacle, toggled
+      per-topic in RViz2; confirmed live. All output unified in a Z-up `map` frame
+      (`nav/frames.py`) so cloud/voxels/`/map`/pose align. Remaining nicety: save a
+      verified `.rviz` config.
+- [ ] **TRACK A (deferred perception upgrade): incremental log-odds voxels + ray
+      carving.** Replace the accumulate-and-re-voxelize scheme with a persistent
+      `voxel -> log-odds` hash updated per frame, with 3D-DDA ray carving to free
+      voxels the sensor now sees through (removes stale/moved obstacles; Technical
+      Spec §4.2). **Cleanly deferrable** — internal to `voxel_mapper_node` + a new
+      `nav/voxel_grid.py`, no topic changes. Complexity: **O(P·L)** per frame
+      (P=new points, L≈range/voxel≈100), memory **O(V)** — beats today's O(N_total)
+      re-voxelization for large maps. Custom (tested) preferred over OctoMap.
 
 ## Phase 3 — Planning & control
 

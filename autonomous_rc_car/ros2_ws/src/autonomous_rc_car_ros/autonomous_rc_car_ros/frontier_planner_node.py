@@ -1,42 +1,97 @@
-"""Frontier planner node (STUB).
+"""frontier_planner_node: /map + /pose -> /cmd_path.
 
-Intended behavior:
-    Subscribes:
-        /map       (nav_msgs/OccupancyGrid) -- inflated occupancy grid
-    Publishes:
-        /cmd_path  (nav_msgs/Path)          -- planned path to the goal
+On each occupancy-grid update, rebuild a nav ``OccupancyGrid`` from the ROS
+message, locate the car cell from the latest pose, pick the nearest reachable
+frontier (``nav.frontier.choose_goal``), plan an A* path over the passable mask
+(``nav.planner.astar``), simplify it to a few line-of-sight waypoints
+(``nav.planner.simplify_path``), and publish it as a Z-up nav_msgs/Path on
+``/cmd_path``. An empty path means no reachable frontier (exploration complete).
 
-Wraps ``nav.frontier.choose_goal`` to pick the next exploration goal cell,
-then ``nav.planner.astar`` over the grid's passable mask and
-``nav.planner.simplify_path`` to produce a compact waypoint path, converted
-into nav_msgs/Path in world coordinates.
-
-NOTE: ROS2 Humble / build + run in WSL2. Not yet implemented.
+Build/run in WSL2 (ROS2 Humble) -- see autonomous_rc_car/ROS2_SETUP.md.
 """
+
+import numpy as np
 
 import rclpy
 from rclpy.node import Node
 
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid, Path
+from std_msgs.msg import Header
 
-from nav import frontier, planner  # noqa: F401  (used once implemented)
+from nav.frames import points_arkit_to_ros, points_ros_to_arkit
+from nav.frontier import choose_goal, nearest_passable
+from nav.planner import astar, simplify_path
+from nav.ros_export import occupancy_to_grid
 
 
 class FrontierPlannerNode(Node):
-    """Chooses a frontier goal and plans an A* path to it (stub)."""
-
     def __init__(self):
         super().__init__('frontier_planner_node')
-        self.get_logger().warn('TODO: frontier_planner_node not yet implemented')
+        self.declare_parameter('frame_id', 'map')
+        self._frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
 
-        self._map_sub = self.create_subscription(
-            OccupancyGrid, '/map', self._on_map, 1
-        )
+        self._pose = None  # latest ROS pose position (x, y, z)
+
+        self.create_subscription(PoseStamped, '/pose', self._on_pose, 10)
+        self.create_subscription(OccupancyGrid, '/map', self._on_map, 1)
         self._path_pub = self.create_publisher(Path, '/cmd_path', 1)
 
-    def _on_map(self, msg):
-        # TODO: choose_goal -> astar -> simplify_path -> publish /cmd_path.
-        pass
+        self.get_logger().info('frontier_planner_node up: /map + /pose -> /cmd_path')
+
+    def _on_pose(self, msg: PoseStamped):
+        p = msg.pose.position
+        self._pose = (p.x, p.y, p.z)
+
+    def _on_map(self, msg: OccupancyGrid):
+        if self._pose is None:
+            return
+        info = msg.info
+        grid = occupancy_to_grid(info.width, info.height, info.resolution,
+                                 info.origin.position.x, info.origin.position.y, msg.data)
+        floor_y = info.origin.position.z
+
+        # ROS pose -> ARKit world; nav grid indexes (world x, world z).
+        world = points_ros_to_arkit(np.array([self._pose], dtype=np.float32))[0]
+        car_cell = grid.world_to_cell(float(world[0]), float(world[2]))
+
+        goal = choose_goal(grid, car_cell)
+        if goal is None:
+            self._publish_path([], floor_y)
+            return
+        start = nearest_passable(grid, car_cell)
+        if start is None:
+            return
+        cells = astar(grid.passable(), start, goal)
+        if not cells:
+            return
+        cells = simplify_path(cells, grid.passable())
+        world_pts = [grid.cell_to_world(r, c) for (r, c) in cells]  # [(x, z), ...]
+        self._publish_path(world_pts, floor_y)
+
+    def _publish_path(self, world_pts, floor_y):
+        path = Path()
+        path.header = self._header()
+        for wx, wz in world_pts:
+            ros = points_arkit_to_ros(np.array([[wx, floor_y, wz]], dtype=np.float32))[0]
+            ps = PoseStamped()
+            ps.header = path.header
+            ps.pose.position.x = float(ros[0])
+            ps.pose.position.y = float(ros[1])
+            ps.pose.position.z = float(ros[2])
+            ps.pose.orientation.w = 1.0
+            path.poses.append(ps)
+        self._path_pub.publish(path)
+        if world_pts:
+            self.get_logger().info(f'planned path: {len(world_pts)} waypoints')
+        else:
+            self.get_logger().info('no reachable frontier -- exploration may be complete')
+
+    def _header(self):
+        h = Header()
+        h.stamp = self.get_clock().now().to_msg()
+        h.frame_id = self._frame_id
+        return h
 
 
 def main(args=None):

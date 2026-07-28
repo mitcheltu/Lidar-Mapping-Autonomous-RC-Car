@@ -9,6 +9,7 @@ from nav.ros_export import (
     ROS_UNKNOWN,
     categorize_points,
     grid_to_occupancy,
+    occupancy_to_grid,
 )
 
 
@@ -73,3 +74,23 @@ def test_categorize_points_handles_empty_cloud():
     layers = categorize_points(np.zeros((0, 3), np.float32), floor_y=0.0)
     assert layers["ground"].shape == (0, 3)
     assert layers["obstacle"].shape == (0, 3)
+
+
+def test_occupancy_roundtrip_recovers_cells_blocked_and_origin():
+    g = make_grid()
+    exp = grid_to_occupancy(g)
+    back = occupancy_to_grid(exp.width, exp.height, exp.resolution,
+                             exp.origin_x, exp.origin_y, exp.data)
+    assert np.array_equal(back.cells, g.cells)
+    assert np.array_equal(back.blocked, g.blocked)
+    assert back.cell_size == g.cell_size
+    assert back.origin[0] == pytest.approx(g.origin[0])
+    assert back.origin[1] == pytest.approx(g.origin[1])
+
+
+def test_occupancy_roundtrip_preserves_passable_for_planning():
+    g = make_grid()
+    exp = grid_to_occupancy(g)
+    back = occupancy_to_grid(exp.width, exp.height, exp.resolution,
+                             exp.origin_x, exp.origin_y, exp.data)
+    assert np.array_equal(back.passable(), g.passable())

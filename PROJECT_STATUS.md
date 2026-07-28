@@ -24,8 +24,8 @@ Proven-architecture reference: **RoBart** (iPhone-brain + BLE microcontroller).
 | `pc_viewer.py` walkthrough preview (`G` key) | **Working** — map the room with just the phone, no car |
 | Car hardware (chassis/motors/H-bridge) | **Not built** — parts not purchased; ESP32 owned but unwired |
 | ESP32 firmware (`esp32_car.ino`) | Written, **not flashed/field-tested** |
-| ROS2 nodes / launch / Nav2 config | **Name-only** — plain scripts, no `rclpy`, no ament package, configs unused (see §7.2) |
-| Autonomy driving loop (Milestone B) | **Not functional** — partially scaffolded (see §6) |
+| ROS2 ament package (`autonomous_rc_car_ros`) | **Real** — builds/runs in WSL2. `bridge_node`, `voxel_mapper_node` (map + 3D voxel cubes), `frontier_planner_node` (A* path) implemented; all output in a unified Z-up `map` frame. `motion_controller`/`icp_slam` still stubs. |
+| Autonomy driving loop (Milestone B) | **In progress** — perception + planning up; controller + drive path next (see §6) |
 
 **Bottom line:** the only end-to-end runnable path is **phone + laptop** (scan a
 room, watch/preview the map). Nothing drives yet.

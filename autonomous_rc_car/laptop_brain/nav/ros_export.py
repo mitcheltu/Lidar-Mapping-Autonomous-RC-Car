@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from nav.grid import FREE, OCCUPIED
+from nav.grid import FREE, OCCUPIED, UNKNOWN, OccupancyGrid
 
 # ROS occupancy cost values (nav_msgs/OccupancyGrid data is int8, 0..100, -1 unknown).
 ROS_UNKNOWN = -1
@@ -85,3 +85,24 @@ def categorize_points(xyz, floor_y, floor_band=0.04, clearance=0.06,
     obstacle = xyz[(y > floor_y + clearance) & (y < floor_y + robot_height)]
     return {"ground": np.ascontiguousarray(ground),
             "obstacle": np.ascontiguousarray(obstacle)}
+
+
+def occupancy_to_grid(width, height, resolution, origin_x, origin_y, data):
+    """Inverse of ``grid_to_occupancy``: a Z-up ROS OccupancyGrid payload back
+    into a nav ``OccupancyGrid`` (with ``blocked`` set) for the planner.
+
+    Undoes the row flip and value mapping, and recovers the nav world origin
+    ``(x, z)`` from the ROS origin (``world_z0 = -origin_y - height*resolution``).
+    """
+    arr = np.asarray(data, dtype=np.int8).reshape(int(height), int(width))
+    out = np.flipud(arr)   # ROS +y = -world z -> undo the flip: row = world z index
+    cells = np.full(out.shape, UNKNOWN, dtype=np.int8)
+    cells[(out == ROS_FREE) | (out == ROS_INFLATED)] = FREE
+    cells[out == ROS_OCCUPIED] = OCCUPIED
+    grid = OccupancyGrid(
+        cells=cells,
+        origin=(float(origin_x), -float(origin_y) - int(height) * float(resolution)),
+        cell_size=float(resolution),
+    )
+    grid.blocked = (out == ROS_INFLATED) | (out == ROS_OCCUPIED)
+    return grid
