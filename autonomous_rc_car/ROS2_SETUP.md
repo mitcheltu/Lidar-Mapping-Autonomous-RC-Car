@@ -41,9 +41,14 @@ or clone into the Linux filesystem (faster). Then install the `nav` library so t
 ROS2 nodes can `import nav`:
 
 ```bash
+# Ubuntu 22.04 ships setuptools 59 (pre-PEP 660) -> `pip install -e` fails.
+# Upgrade first so editable installs work:
+pip3 install --upgrade pip setuptools wheel
+
 # open3d/scipy/numpy on Python 3.10 (Ubuntu 22.04 default)
 cd "/mnt/c/Users/mitch/OneDrive/Documents/Claude/Projects/Remote Car/autonomous_rc_car"
-pip install -e ./laptop_brain          # installs the rc-car-nav library (nav.*)
+pip3 install -e ./laptop_brain          # installs the rc-car-nav library (nav.*)
+# if editable still errors: pip3 install --no-build-isolation -e ./laptop_brain
 ```
 
 > If `open3d` is heavy/slow to import in the mapping node, that's expected; it is a

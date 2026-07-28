@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=64"]  # >=64 provides the PEP 660 build_editable hook (pip install -e)
 build-backend = "setuptools.build_meta"
 
 [project]
