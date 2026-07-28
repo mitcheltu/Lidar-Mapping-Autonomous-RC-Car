@@ -45,6 +45,9 @@ class FrontierPlannerNode(Node):
 
     def _on_map(self, msg: OccupancyGrid):
         if self._pose is None:
+            self.get_logger().warn(
+                'have /map but no /pose yet -- cannot locate the car, not planning. '
+                'Is the phone streaming pose?', throttle_duration_sec=5.0)
             return
         info = msg.info
         grid = occupancy_to_grid(info.width, info.height, info.resolution,
