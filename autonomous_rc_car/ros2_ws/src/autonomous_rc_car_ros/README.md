@@ -6,28 +6,27 @@ the mapping / planning / control / SLAM nodes. The heavy algorithms live in the
 pip-installable `nav` library (`autonomous_rc_car/laptop_brain`); the ROS nodes
 are thin wrappers around it.
 
-> Implemented: `bridge_node`, `voxel_mapper_node`, `frontier_planner_node`. Still
-> **stubs** (warn on startup, wire up topics, no real work yet):
-> `motion_controller_node`, `icp_slam_node`.
+> Implemented: `bridge_node`, `voxel_mapper_node`, `frontier_planner_node`,
+> `motion_controller_node`. Still a **stub**: `icp_slam_node`.
 
 ## Topic graph
 
 - `bridge_node` (real): TCP `:9000` -> `/points` (PointCloud2), `/pose`
   (PoseStamped), `/image` (CompressedImage); subscribes `/drive` (String) and
   relays it back over the socket to the phone/ESP32.
-- `voxel_mapper_node` (real): accumulates `/points`, on a timer runs `nav.mapping`
-  (clean -> floor -> build_occupancy_grid -> inflate) and publishes `/map`
-  (nav_msgs/OccupancyGrid) plus true 3D voxel layers `/voxels/ground` and
-  `/voxels/obstacle` (visualization_msgs/MarkerArray, CUBE_LIST — a cube of edge
-  `voxel_size` wherever enough LiDAR hits land). Params: `rebuild_period`,
-  `cell_size`, `robot_radius`, `voxel_size`, `min_points_obstacle`, `min_points`,
-  `max_points`.
+- `voxel_mapper_node` (real): incremental **log-odds voxel grid** with ray carving
+  (`nav.voxel_grid`) — integrates each `/points` batch from the `/pose` sensor
+  origin, carving voxels it sees through. Publishes `/map` (nav_msgs/OccupancyGrid)
+  plus 3D voxel cube layers `/voxels/ground` and `/voxels/obstacle`
+  (visualization_msgs/MarkerArray, CUBE_LIST). Params: `rebuild_period`,
+  `cell_size`, `robot_radius`, `voxel_size`, `max_range`, `max_rays`, `min_voxels`.
+- `motion_controller_node` (real): `/cmd_path` + `/pose` -> `/drive` (std_msgs/String
+  `"L..R.."`). Turn-then-drive `nav.controller.WaypointFollower`; stops (`L0R0`) when
+  idle or the path is complete.
 - `frontier_planner_node` (real): `/map` + `/pose` -> `/cmd_path` (nav_msgs/Path).
   Rebuilds the nav grid, locates the car cell, picks the nearest reachable frontier
   (`nav.frontier.choose_goal`) and plans an A* + line-of-sight path
   (`nav.planner.astar` / `simplify_path`). Empty path = exploration complete.
-- `motion_controller_node` (stub): `/cmd_path` + `/pose` -> `/drive` (String,
-  `"L..R.."`) via pure-pursuit over `nav.localization.pose_to_2d`.
 - `icp_slam_node` (stub): `/points` + `/pose` -> `/pose_corrected` (PoseStamped)
   via KISS-ICP scan-to-map.
 

@@ -105,8 +105,10 @@ on recorded data → planning+control → iOS reverse channel → build car → 
         grid (`nav.ros_export.occupancy_to_grid`), locates the car from `/pose`, runs
         `nav.frontier.choose_goal` + `nav.planner.astar`/`simplify_path`, publishes a
         Z-up `/cmd_path`. **Needs colcon build + runtime check in WSL2.**
-  - [ ] `motion_controller` — subscribe `/cmd_path` `/pose_corrected`, run
-        pure-pursuit/waypoint follow, publish `/drive`.
+  - [x] `motion_controller_node` — **implemented.** Follows `/cmd_path` with a
+        turn-then-drive `nav.controller.WaypointFollower`; reconstructs (x,z,theta)
+        from `/pose` and publishes `L<left>R<right>` on `/drive` (stop when idle/done).
+        (Will switch to `/pose_corrected` once `icp_slam_node` lands.)
   - [ ] `icp_slam_node` — subscribe `/points` `/pose`, run KISS-ICP scan-to-map,
         publish `/pose_corrected`.
 - [ ] **Wire the config yamls** — actually load `calibration_params.yaml`
@@ -129,14 +131,14 @@ on recorded data → planning+control → iOS reverse channel → build car → 
       per-topic in RViz2; confirmed live. All output unified in a Z-up `map` frame
       (`nav/frames.py`) so cloud/voxels/`/map`/pose align. Remaining nicety: save a
       verified `.rviz` config.
-- [ ] **TRACK A (deferred perception upgrade): incremental log-odds voxels + ray
-      carving.** Replace the accumulate-and-re-voxelize scheme with a persistent
-      `voxel -> log-odds` hash updated per frame, with 3D-DDA ray carving to free
-      voxels the sensor now sees through (removes stale/moved obstacles; Technical
-      Spec §4.2). **Cleanly deferrable** — internal to `voxel_mapper_node` + a new
-      `nav/voxel_grid.py`, no topic changes. Complexity: **O(P·L)** per frame
-      (P=new points, L≈range/voxel≈100), memory **O(V)** — beats today's O(N_total)
-      re-voxelization for large maps. Custom (tested) preferred over OctoMap.
+- [x] **TRACK A: incremental log-odds voxels + ray carving — IMPLEMENTED.**
+      `nav/voxel_grid.py` (`VoxelGrid`, Amanatides–Woo 3D-DDA, unit-tested inc. a
+      carving test) keeps a persistent `voxel -> log-odds` hash; `voxel_mapper_node`
+      now integrates each `/points` batch from the `/pose` sensor origin (occupied at
+      the hit, free along the ray), carving stale/moved obstacles. O(P·L)/frame — no
+      more whole-cloud re-voxelization (fixes the CPU pegging). Tunables: `voxel_size`,
+      `max_range`, `max_rays`. Follow-ups: port DDA to numba/C if Python carving is
+      too slow at scale; free-voxel display layer.
 
 ## Phase 3 — Planning & control
 
