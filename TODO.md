@@ -62,10 +62,11 @@ on recorded data → planning+control → iOS reverse channel → build car → 
   - [ ] Optional: merge `milestone-a-nav` → `master`.
 - [x] **Fix stale doc paths** — done in `Build-Plan.md` + ios_app README (TDD plan
       left as historical).
-- [ ] **De-dup the iOS app** — reconcile `RCCarLidarStreamer` vs "PointCloudScanner"
-      naming; remove duplicated Swift files (root `ContentView.swift` +
-      `App/ContentView.swift`; `PointCloudStreamer.swift` + `Network/*Streamer.swift`).
-      *(Needs care — validate in Xcode; deferred.)*
+- [x] **De-dup the iOS app** — removed the stub `App/ AR/ Network/` folders (they were
+      placeholders with a second `@main`). Folder is now 7 real Swift files, one `@main`.
+      README file list + permission keys fixed (added `PointCloudStreamer.swift`,
+      `NSLocalNetworkUsageDescription`). *(struct still named `PointCloudScannerApp` —
+      cosmetic, not a build issue.)*
 
 ## Phase 1 — Make ROS2 real (the foundation)
 
