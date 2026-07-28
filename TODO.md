@@ -77,9 +77,9 @@ on recorded data → planning+control → iOS reverse channel → build car → 
       moved the wire protocol into `nav/stream_protocol.py` (nodes/ shim kept). 57 tests green.
 - [x] **Wrote the WSL2/ROS2 setup guide** — `autonomous_rc_car/ROS2_SETUP.md`
       (install, build/run, and the WSL2 networking fix so the phone can reach `bridge_node`).
-- [~] **Scaffolded the ament package** `ros2_ws/src/autonomous_rc_car_ros` (package.xml,
-      setup.py, entry points, `bridge_node` real + 4 stub nodes, launch). **Authored on
-      Windows — NOT yet built.**
+- [x] **Scaffolded the ament package** `ros2_ws/src/autonomous_rc_car_ros` (package.xml,
+      setup.py, entry points, `bridge_node` real + 4 stub nodes, launch, README).
+      Syntax-checked on Windows; **NOT yet colcon-built.**
 - [ ] **← NEXT MAJOR-VALIDATION CHECKPOINT:** in WSL2, `pip install -e laptop_brain`
       + `colcon build` + `ros2 launch ... bringup.launch.py`; confirm the phone stream
       reaches `bridge_node` and `/points` `/pose` `/image` publish. Report back before
