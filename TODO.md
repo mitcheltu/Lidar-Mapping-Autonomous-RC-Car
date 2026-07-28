@@ -50,26 +50,28 @@ on recorded data → planning+control → iOS reverse channel → build car → 
 
 ---
 
-## Phase 0 — Repo baseline & housekeeping (do first; unblocks everything)
+## Phase 0 — Repo baseline & housekeeping (mostly DONE)
 
-- [ ] **Free disk space** — `C:` is 100% full; blocks `git` and `pip`. Reclaim
-      `.venv312/` (721 MB) / `captures/` (216 MB) / `.venv/` (22 MB) as you see fit.
-- [ ] **Write `.gitignore`** at repo root: `.venv/`, `.venv312/`, `__pycache__/`,
-      `.pytest_cache/`, `captures/`, `*.f32`, stray `*.ply`, `tmp_*`.
-- [ ] **Git baseline** — treat the reconciled tree as the start of the repo:
-      `git add -A` the `autonomous_rc_car/` structure + the root docs, make the
-      **initial commit**. (Old `viewer/`/`firmware/`/`PointCloudScanner/` are gone.)
-- [ ] **Fix stale doc paths** — `viewer/`→`laptop_brain/`, `firmware/`→
-      `esp32_firmware/`, `PointCloudScanner/`→`ios_app/RCCarLidarStreamer/` across
-      `Build-Plan.md`, the ios_app README, and the TDD plan.
+- [x] **Free disk space** — user reclaimed space; ~59 GB free now.
+- [x] **Write `.gitignore`** at repo root for the new tree (venvs, captures, `*.f32`,
+      `tmp_*`, ROS2 build/install/log).
+- [x] **Git baseline** — committed the reorg (history preserved, 29 renames detected)
+      as `28d45f1` on `milestone-a-nav`. 50 tests green beforehand.
+  - [ ] **Push blocked** — `git push` fails with an SSL cert error (env/proxy issue).
+        Retry with `! git push -u origin milestone-a-nav` once the cert/network is fixed.
+  - [ ] Optional: merge `milestone-a-nav` → `master`.
+- [x] **Fix stale doc paths** — done in `Build-Plan.md` + ios_app README (TDD plan
+      left as historical).
 - [ ] **De-dup the iOS app** — reconcile `RCCarLidarStreamer` vs "PointCloudScanner"
       naming; remove duplicated Swift files (root `ContentView.swift` +
       `App/ContentView.swift`; `PointCloudStreamer.swift` + `Network/*Streamer.swift`).
+      *(Needs care — validate in Xcode; deferred.)*
 
 ## Phase 1 — Make ROS2 real (the foundation)
 
-- [ ] **Decide the ROS2 host** — ROS2 on Windows is painful; pick **WSL2/Ubuntu**
-      or a **Docker** dev container for `laptop_brain`. Document the choice + setup.
+- [x] **ROS2 host decided: WSL2 + Ubuntu 22.04 / ROS2 Humble** (2026-07-27).
+- [ ] Stand up WSL2 + ROS2 Humble; document setup; verify the phone can stream to
+      the WSL2 IP over the LAN. **← next major-validation checkpoint.**
 - [ ] **Create an ament_python package** for `autonomous_rc_car`: `package.xml`,
       `setup.py`, `setup.cfg`, `resource/`, console_scripts entry points. Make
       `colcon build` + `ros2 run` actually work.

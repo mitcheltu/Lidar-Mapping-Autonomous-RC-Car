@@ -48,6 +48,13 @@ import cv2
 from nav.localization import pose_from_streamed, pose_to_2d
 from nav.preview import preview_plan
 from nav.voxel_viewer import build_overlay_geometry, prepare_point_cloud_geometry
+from nodes.stream_protocol import (
+    MESSAGE_TYPE_IMAGE,
+    MESSAGE_TYPE_POINT_CLOUD,
+    MESSAGE_TYPE_POSE,
+    decode_points_payload,
+    decode_pose_payload,
+)
 
 HOST = "0.0.0.0"
 PORT = 9000
@@ -107,23 +114,21 @@ def receiver():
                 if payload is None:
                     break
 
-                if mtype == 0x50:  # 'P' points
-                    count = struct.unpack("<I", payload[:4])[0]
-                    body = np.frombuffer(payload[4:], dtype=np.uint8)
-                    if body.size >= count * 15:
-                        body = body[:count * 15].reshape(count, 15)
-                        xyz = np.ascontiguousarray(body[:, :12]).view(np.float32).reshape(count, 3)
-                        rgb = body[:, 12:15].astype(np.float32) / 255.0
-                        with _lock:
-                            _incoming_points.append((xyz.copy(), rgb))
+                if mtype == MESSAGE_TYPE_POINT_CLOUD:
+                    try:
+                        xyz, rgb = decode_points_payload(payload)
+                    except ValueError:
+                        continue
+                    with _lock:
+                        _incoming_points.append((xyz, rgb))
 
-                elif mtype == 0x4F:  # 'O' pose
-                    vals = struct.unpack("<16f", payload)
+                elif mtype == MESSAGE_TYPE_POSE:
+                    vals = decode_pose_payload(payload)
                     with _lock:
                         _latest_pose[0] = vals
                         _path.append(np.array([vals[12], vals[13], vals[14]], dtype=np.float64))
 
-                elif mtype == 0x49:  # 'I' jpeg
+                elif mtype == MESSAGE_TYPE_IMAGE:
                     with _lock:
                         _latest_jpeg[0] = payload
         except (ConnectionResetError, OSError):

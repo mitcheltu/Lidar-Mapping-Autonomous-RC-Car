@@ -1,4 +1,13 @@
-"""Binary framing helpers for point-cloud streaming between the iOS app and laptop viewer."""
+"""Binary framing for the iPhone <-> laptop stream (points, pose, image).
+
+One wire protocol shared by the viewer and the (future) ROS2 bridge node.
+Each message is framed as: 1 byte type + uint32 little-endian payload length +
+payload. Message types match the iOS app:
+
+  'P' 0x50 points : uint32 count, then per point  float32 x,y,z + uint8 r,g,b  (15 B/pt)
+  'O' 0x4F pose   : 16 float32, the camera 4x4 transform (column-major)
+  'I' 0x49 image  : raw JPEG bytes of a downscaled camera frame
+"""
 
 from __future__ import annotations
 
@@ -7,68 +16,115 @@ from typing import Tuple
 
 import numpy as np
 
-MESSAGE_TYPE_POINT_CLOUD = 0x50
+MESSAGE_TYPE_POINT_CLOUD = 0x50  # 'P'
+MESSAGE_TYPE_POSE = 0x4F         # 'O'
+MESSAGE_TYPE_IMAGE = 0x49        # 'I'
+
+POINT_STRIDE = 15                # 12 bytes xyz float32 + 3 bytes rgb uint8
 
 
-def encode_point_cloud_packet(points: np.ndarray, colors: np.ndarray | None = None) -> bytes:
-    """Encode a point-cloud frame as a small binary packet."""
+# --- framing ---------------------------------------------------------------
+
+def frame(mtype: int, payload: bytes) -> bytes:
+    """Wrap a payload with the 1-byte type + uint32 LE length header."""
+    return struct.pack("<BI", mtype, len(payload)) + payload
+
+
+def parse_frame(buf: bytes) -> Tuple[int, bytes]:
+    """Split a framed message into (message_type, payload). Raises ValueError
+    if the buffer is shorter than the header or its declared payload length."""
+    if len(buf) < 5:
+        raise ValueError("frame is too short")
+    mtype = buf[0]
+    length = struct.unpack("<I", buf[1:5])[0]
+    payload = buf[5:]
+    if len(payload) < length:
+        raise ValueError("truncated payload")
+    return mtype, payload[:length]
+
+
+# --- point cloud -----------------------------------------------------------
+
+def encode_points_payload(points: np.ndarray, colors: np.ndarray | None = None) -> bytes:
+    """Pack an (N,3) cloud into  uint32 count + N*(xyz float32, rgb uint8)."""
     points = np.asarray(points, dtype=np.float32)
     if points.ndim != 2 or points.shape[1] != 3:
         raise ValueError("points must be a (N, 3) float32 array")
-
+    n = points.shape[0]
     if colors is None:
-        colors = np.zeros((points.shape[0], 3), dtype=np.float32)
+        colors = np.zeros((n, 3), dtype=np.float32)
     colors = np.asarray(colors, dtype=np.float32)
-    if colors.shape != (points.shape[0], 3):
+    if colors.shape != (n, 3):
         raise ValueError("colors must match the point count and have shape (N, 3)")
 
-    payload = bytearray()
-    payload.extend(struct.pack("<I", int(points.shape[0])))
-    for idx in range(points.shape[0]):
-        payload.extend(struct.pack("<fff", float(points[idx, 0]), float(points[idx, 1]), float(points[idx, 2])))
-        payload.extend(struct.pack("<BBB", int(np.clip(colors[idx, 0], 0.0, 1.0) * 255.0), int(np.clip(colors[idx, 1], 0.0, 1.0) * 255.0), int(np.clip(colors[idx, 2], 0.0, 1.0) * 255.0)))
-
-    frame = bytearray()
-    frame.extend(struct.pack("<B", MESSAGE_TYPE_POINT_CLOUD))
-    frame.extend(struct.pack("<I", len(payload)))
-    frame.extend(payload)
-    return bytes(frame)
+    body = np.empty((n, POINT_STRIDE), dtype=np.uint8)
+    body[:, :12] = np.ascontiguousarray(points.astype("<f4")).view(np.uint8).reshape(n, 12)
+    body[:, 12:15] = (np.clip(colors, 0.0, 1.0) * 255.0).astype(np.uint8)
+    return struct.pack("<I", n) + body.tobytes()
 
 
-def decode_point_cloud_packet(frame: bytes) -> Tuple[np.ndarray, np.ndarray]:
-    """Decode a point-cloud frame back into points and colors."""
-    if len(frame) < 5:
-        raise ValueError("frame is too short")
-
-    mtype = frame[0]
-    if mtype != MESSAGE_TYPE_POINT_CLOUD:
-        raise ValueError("unexpected message type")
-
-    length = struct.unpack("<I", frame[1:5])[0]
-    payload = frame[5:]
-    if len(payload) < length:
-        raise ValueError("truncated payload")
-
-    payload = payload[:length]
+def decode_points_payload(payload: bytes) -> Tuple[np.ndarray, np.ndarray]:
+    """Vectorized inverse of encode_points_payload. Returns (xyz float32 [N,3],
+    rgb float32 [N,3] in 0..1)."""
     if len(payload) < 4:
         raise ValueError("payload is too short")
-
     count = struct.unpack("<I", payload[:4])[0]
-    body = payload[4:]
-    if len(body) != count * 15:
+    body = np.frombuffer(payload[4:], dtype=np.uint8)
+    if body.size < count * POINT_STRIDE:
         raise ValueError("payload size does not match point count")
+    body = body[: count * POINT_STRIDE].reshape(count, POINT_STRIDE)
+    xyz = np.ascontiguousarray(body[:, :12]).view(np.float32).reshape(count, 3).copy()
+    rgb = body[:, 12:15].astype(np.float32) / 255.0
+    return xyz, rgb
 
-    points = np.empty((count, 3), dtype=np.float32)
-    colors = np.empty((count, 3), dtype=np.float32)
-    offset = 0
-    for idx in range(count):
-        points[idx, :] = np.frombuffer(body[offset:offset + 12], dtype=np.float32)
-        offset += 12
-        colors[idx, :] = np.array([
-            body[offset] / 255.0,
-            body[offset + 1] / 255.0,
-            body[offset + 2] / 255.0,
-        ], dtype=np.float32)
-        offset += 3
 
-    return points, colors
+def encode_point_cloud_packet(points: np.ndarray, colors: np.ndarray | None = None) -> bytes:
+    return frame(MESSAGE_TYPE_POINT_CLOUD, encode_points_payload(points, colors))
+
+
+def decode_point_cloud_packet(buf: bytes) -> Tuple[np.ndarray, np.ndarray]:
+    mtype, payload = parse_frame(buf)
+    if mtype != MESSAGE_TYPE_POINT_CLOUD:
+        raise ValueError("unexpected message type")
+    return decode_points_payload(payload)
+
+
+# --- pose ------------------------------------------------------------------
+
+def encode_pose_payload(matrix) -> bytes:
+    """Pack a 4x4 (or flat 16-element) transform as 16 float32 LE."""
+    vals = np.asarray(matrix, dtype="<f4").ravel()
+    if vals.size != 16:
+        raise ValueError("pose must have 16 elements")
+    return vals.tobytes()
+
+
+def decode_pose_payload(payload: bytes) -> Tuple[float, ...]:
+    """Return the 16 pose floats (column-major 4x4, as the app sends them)."""
+    if len(payload) < 64:
+        raise ValueError("pose payload must be 64 bytes")
+    return struct.unpack("<16f", payload[:64])
+
+
+def encode_pose_packet(matrix) -> bytes:
+    return frame(MESSAGE_TYPE_POSE, encode_pose_payload(matrix))
+
+
+def decode_pose_packet(buf: bytes) -> Tuple[float, ...]:
+    mtype, payload = parse_frame(buf)
+    if mtype != MESSAGE_TYPE_POSE:
+        raise ValueError("unexpected message type")
+    return decode_pose_payload(payload)
+
+
+# --- image -----------------------------------------------------------------
+
+def encode_image_packet(jpeg: bytes) -> bytes:
+    return frame(MESSAGE_TYPE_IMAGE, bytes(jpeg))
+
+
+def decode_image_packet(buf: bytes) -> bytes:
+    mtype, payload = parse_frame(buf)
+    if mtype != MESSAGE_TYPE_IMAGE:
+        raise ValueError("unexpected message type")
+    return payload
