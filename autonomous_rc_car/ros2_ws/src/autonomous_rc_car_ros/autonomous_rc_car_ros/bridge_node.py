@@ -33,6 +33,7 @@ from std_msgs.msg import Header, String
 from sensor_msgs_py import point_cloud2
 
 from nav import stream_protocol
+from nav.frames import points_arkit_to_ros, rotation_arkit_to_ros
 from nav.stream_protocol import (
     MESSAGE_TYPE_IMAGE,
     MESSAGE_TYPE_POINT_CLOUD,
@@ -199,6 +200,9 @@ class BridgeNode(Node):
     def _publish_points(self, payload):
         xyz, _rgb = decode_points_payload(payload)
         xyz = np.asarray(xyz, dtype=np.float32)
+        # ARKit (y-up) -> ROS (z-up) so the cloud is upright and shares one frame
+        # with the pose, voxels and map.
+        xyz = points_arkit_to_ros(xyz)
 
         header = self._make_header()
         # Points-only cloud keeps this simple and correct; colour can be added
@@ -208,16 +212,18 @@ class BridgeNode(Node):
 
     def _publish_pose(self, payload):
         vals = decode_pose_payload(payload)  # 16 col-major floats
-        # Column-major -> row-major 4x4 camera-to-world.
+        # Column-major -> row-major 4x4 camera-to-world (ARKit frame).
         mat = np.array(vals, dtype=np.float64).reshape(4, 4).T
+        pos = points_arkit_to_ros(mat[:3, 3].reshape(1, 3))[0]
+        rot_ros = rotation_arkit_to_ros(mat[:3, :3])
 
         msg = PoseStamped()
         msg.header = self._make_header()
-        msg.pose.position.x = float(mat[0, 3])
-        msg.pose.position.y = float(mat[1, 3])
-        msg.pose.position.z = float(mat[2, 3])
+        msg.pose.position.x = float(pos[0])
+        msg.pose.position.y = float(pos[1])
+        msg.pose.position.z = float(pos[2])
 
-        qx, qy, qz, qw = rotation_matrix_to_quaternion(mat[:3, :3])
+        qx, qy, qz, qw = rotation_matrix_to_quaternion(rot_ros)
         msg.pose.orientation.x = float(qx)
         msg.pose.orientation.y = float(qy)
         msg.pose.orientation.z = float(qz)

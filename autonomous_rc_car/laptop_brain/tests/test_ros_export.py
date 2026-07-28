@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from nav.grid import OccupancyGrid, FREE, OCCUPIED, UNKNOWN
 from nav.ros_export import (
@@ -23,28 +24,32 @@ def make_grid():
     return g
 
 
-def test_grid_to_occupancy_metadata_matches_grid():
+def test_grid_to_occupancy_metadata_is_zup_ros():
     exp = grid_to_occupancy(make_grid())
     assert exp.width == 4 and exp.height == 3
     assert exp.resolution == 0.05
-    assert exp.origin_x == -0.5 and exp.origin_y == -1.0
     assert len(exp.data) == 12
+    assert exp.origin_x == pytest.approx(-0.5)
+    # ROS y of the data[0] corner = -(world z origin + rows*cell)
+    assert exp.origin_y == pytest.approx(-(-1.0 + 3 * 0.05))
 
 
 def test_grid_to_occupancy_value_mapping():
     exp = grid_to_occupancy(make_grid())
-    data = np.array(exp.data, dtype=np.int8).reshape(3, 4)
-    assert data[0, 0] == ROS_FREE          # free
-    assert data[0, 1] == ROS_OCCUPIED      # occupied wins even though blocked
-    assert data[1, 1] == ROS_INFLATED      # free + inflated -> 99
-    assert data[2, 3] == ROS_UNKNOWN       # untouched unknown -> -1
+    # un-flip the published rows to recover the nav-grid layout
+    out = np.flipud(np.array(exp.data, dtype=np.int8).reshape(3, 4))
+    assert out[0, 0] == ROS_FREE           # free
+    assert out[0, 1] == ROS_OCCUPIED       # occupied wins even though blocked
+    assert out[1, 1] == ROS_INFLATED       # free + inflated -> 99
+    assert out[2, 3] == ROS_UNKNOWN        # untouched unknown -> -1
 
 
-def test_grid_to_occupancy_is_row_major_z_then_x():
-    # data[row*width + col] ordering (row = z index, col = x index)
+def test_grid_to_occupancy_flips_rows_for_zup():
+    # world row r (z index) lands at published row (height-1-r) because +ROS y = -world z
     exp = grid_to_occupancy(make_grid())
-    assert exp.data[0 * 4 + 1] == ROS_OCCUPIED   # cells[0,1]
-    assert exp.data[1 * 4 + 1] == ROS_INFLATED   # cells[1,1]
+    data = np.array(exp.data, dtype=np.int8).reshape(3, 4)
+    assert data[2, 1] == ROS_OCCUPIED      # cells[0,1] -> top world row -> last data row
+    assert data[1, 1] == ROS_INFLATED      # cells[1,1] -> middle stays middle
 
 
 def test_categorize_points_splits_ground_and_obstacle():

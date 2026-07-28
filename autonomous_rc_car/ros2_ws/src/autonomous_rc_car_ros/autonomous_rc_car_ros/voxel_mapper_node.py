@@ -29,6 +29,7 @@ from std_msgs.msg import ColorRGBA, Header
 from sensor_msgs_py import point_cloud2
 from visualization_msgs.msg import Marker, MarkerArray
 
+from nav.frames import points_arkit_to_ros, points_ros_to_arkit
 from nav.mapping import build_occupancy_grid, clean_cloud, estimate_floor_height, inflate
 from nav.ros_export import grid_to_occupancy
 from nav.voxel import voxelize
@@ -79,6 +80,8 @@ class VoxelMapperNode(Node):
         xyz = np.array([[p[0], p[1], p[2]] for p in pts], dtype=np.float32)
         if xyz.size == 0:
             return
+        # /points arrive in the ROS z-up frame; nav works in ARKit y-up.
+        xyz = points_ros_to_arkit(xyz)
         self._store = np.vstack([self._store, xyz])
         if self._store.shape[0] > self._max_points:
             self._store = self._store[-self._max_points:]
@@ -103,10 +106,13 @@ class VoxelMapperNode(Node):
 
         voxels = voxelize(cleaned, floor_y, voxel_size=self._voxel_size,
                           min_points_obstacle=self._min_pts_obstacle)
+        # voxel centers are ARKit y-up; publish them in the ROS z-up frame.
+        ground = points_arkit_to_ros(voxels['ground'])
+        obstacle = points_arkit_to_ros(voxels['obstacle'])
         self._ground_pub.publish(self._cube_markers(
-            voxels['ground'], 'ground', ColorRGBA(r=0.15, g=0.75, b=0.25, a=0.9), header))
+            ground, 'ground', ColorRGBA(r=0.15, g=0.75, b=0.25, a=0.9), header))
         self._obstacle_pub.publish(self._cube_markers(
-            voxels['obstacle'], 'obstacle', ColorRGBA(r=0.90, g=0.15, b=0.15, a=0.9), header))
+            obstacle, 'obstacle', ColorRGBA(r=0.90, g=0.15, b=0.15, a=0.9), header))
 
     def _cube_markers(self, centers, ns, color, header):
         """One CUBE_LIST marker of edge voxel_size at each voxel center."""

@@ -28,19 +28,23 @@ ROS_OCCUPIED = 100
 @dataclass
 class OccupancyExport:
     data: list          # row-major int8, length width*height (ROS OccupancyGrid.data)
-    width: int          # cols (world x)
-    height: int         # rows (world z)
+    width: int          # cols (ROS x = world x)
+    height: int         # rows (ROS y = -world z)
     resolution: float   # meters per cell
-    origin_x: float     # world x of cell [0,0] corner
-    origin_y: float     # world z of cell [0,0] corner (ROS y)
+    origin_x: float     # ROS x of the data[0] corner
+    origin_y: float     # ROS y of the data[0] corner
 
 
 def grid_to_occupancy(grid) -> OccupancyExport:
-    """Map a nav OccupancyGrid to nav_msgs/OccupancyGrid payload + metadata.
+    """Map a nav OccupancyGrid to a Z-up ROS nav_msgs/OccupancyGrid payload.
 
     Value mapping: UNKNOWN->-1, FREE->0, inflation buffer->99, OCCUPIED->100.
-    ``data`` is row-major (row = z index, col = x index), matching ROS's
-    ``data[y*width + x]`` ordering when ROS x=world x and ROS y=world z.
+
+    The nav grid indexes rows by world z, cols by world x. The ROS map is Z-up
+    with ROS x = world x and ROS y = -world z (see nav.frames), and its
+    ``data[gy*width + gx]`` starts at the min-corner and increases with +x,+y.
+    Since +ROS-y = -world-z, the rows are flipped and origin_y negated so the
+    published grid lands under the (also z-up) cloud and voxels.
     """
     cells = np.asarray(grid.cells)
     out = np.full(cells.shape, ROS_UNKNOWN, dtype=np.int8)
@@ -50,13 +54,14 @@ def grid_to_occupancy(grid) -> OccupancyExport:
     out[cells == OCCUPIED] = ROS_OCCUPIED
 
     rows, cols = cells.shape
+    cs = float(grid.cell_size)
     return OccupancyExport(
-        data=out.ravel(order="C").astype(np.int8).tolist(),
+        data=np.flipud(out).ravel(order="C").astype(np.int8).tolist(),
         width=int(cols),
         height=int(rows),
-        resolution=float(grid.cell_size),
+        resolution=cs,
         origin_x=float(grid.origin[0]),
-        origin_y=float(grid.origin[1]),
+        origin_y=-(float(grid.origin[1]) + rows * cs),
     )
 
 
