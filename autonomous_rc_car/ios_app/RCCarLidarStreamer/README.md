@@ -19,15 +19,18 @@ later, driving.
 1. Xcode → **File ▸ New ▸ Project… ▸ App**. Product name `RCCarLidarStreamer`,
    Interface **SwiftUI**, Language **Swift**.
 2. Delete the auto-generated `ContentView.swift` and `*App.swift`, then drag
-   these files into the project (check "Copy items if needed"):
-   - `PointCloudScannerApp.swift`
+   all 7 source files into the project (check "Copy items if needed"):
+   - `PointCloudScannerApp.swift`  *(the `@main` entry point)*
    - `ContentView.swift`
    - `ARDepthView.swift`
+   - `PointCloudStreamer.swift`
    - `PointCloudAccumulator.swift`
    - `PLYExporter.swift`
    - `CarController.swift`
-3. Add two keys to **Info** (Target ▸ Info, or Info.plist):
+3. Add these keys to **Info** (Target ▸ Info tab):
    - `NSCameraUsageDescription` → "Used to scan your surroundings with LiDAR."
+   - `NSLocalNetworkUsageDescription` → "Used to stream the scan to the computer."
+     **(required — without it iOS blocks the Wi-Fi stream to the laptop.)**
    - `NSBluetoothAlwaysUsageDescription` → "Used to connect to the robot." *(only
      needed once you start using `CarController`.)*
 4. Select your iPhone as the run target, set your Team under **Signing &
