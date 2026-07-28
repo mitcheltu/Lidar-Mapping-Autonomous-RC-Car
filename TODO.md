@@ -96,11 +96,11 @@ on recorded data → planning+control → iOS reverse channel → build car → 
   - [ ] `bridge_node` — TCP server for the iPhone stream → publish `/points`
         `/pose` `/image`; subscribe `/drive` → send back over the reverse channel.
         (Reuse `stream_protocol.py` for framing.)
-  - [ ] `voxel_mapper_node` — subscribe `/points` `/pose`, call `nav.mapping`
-        (clean → floor → grid → inflate), publish `/map` (OccupancyGrid). Also
-        publish **categorized layers for visualization**: occupied / ground(floor) /
-        free as separate `PointCloud2` (or a cube `MarkerArray`) topics so they can
-        be toggled independently — this is the "see the voxels" capability.
+  - [x] `voxel_mapper_node` — **implemented.** Accumulates `/points`, runs
+        `nav.mapping` on a timer, publishes `/map` (OccupancyGrid) + categorized
+        `/voxels/ground` & `/voxels/obstacle` (PointCloud2). Logic in the ROS-free,
+        unit-tested `nav/ros_export.py` (`grid_to_occupancy`, `categorize_points`).
+        **Needs colcon build + runtime check in WSL2.**
   - [ ] `frontier_planner_node` — subscribe `/map`, call `nav.frontier` +
         `nav.planner`, publish `/cmd_path`. (Or delegate to Nav2 — see Phase 3.)
   - [ ] `motion_controller` — subscribe `/cmd_path` `/pose_corrected`, run
@@ -122,11 +122,10 @@ on recorded data → planning+control → iOS reverse channel → build car → 
       recorded walkthrough (compare raw vs corrected trajectory).
 - [ ] Point `pc_viewer.py` at the ROS2 topics (or keep it on the raw stream) and
       overlay `/map` + `/cmd_path`. Move the preview off the GUI thread.
-- [ ] **Categorized voxel viewer ("see the voxels": occupied / ground / free).**
-      Preferred: **RViz2** — add an `rviz/` config that shows the categorized
-      `voxel_mapper_node` layers + `/map` + `/points` + `/pose`, each toggled by its
-      own checkbox (this is the ROS-native version of the Technical Spec's PyQt6/PyVista
-      GUI, for far less effort). Fallback: the custom PyVista/PyQt6 GUI from
+- [~] **Categorized voxel viewer ("see the voxels": occupied / ground / free).**
+      `voxel_mapper_node` now publishes the layers; **RViz2** toggles them per-topic
+      (workflow documented in the package README). Remaining: save a verified `.rviz`
+      config once built in WSL2. Fallback: the custom PyVista/PyQt6 GUI from
       `autonomous_rc_car/README.md` §6 only if an embeddable non-ROS viewer is wanted.
       *(Today's `pc_viewer.py` G-preview shows only the 2D grid: green=free / amber=
       inflation / red=obstacle — not per-category 3D voxel layers.)*
