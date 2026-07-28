@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>autonomous_rc_car_ros</name>
+  <version>0.1.0</version>
+  <description>
+    ROS2 (Humble) bringup for the autonomous RC car. Bridges the iPhone
+    LiDAR/pose/image TCP stream into ROS topics and hosts the mapping,
+    frontier planning, motion control and ICP SLAM nodes.
+  </description>
+
+  <maintainer email="tumk@uci.edu">mitcheltu</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+
+  <!--
+    NOTE: the pure-Python algorithm library `nav` (autonomous_rc_car/laptop_brain)
+    is a pip dependency, NOT a rosdep/ament package. Install it into the ROS2
+    Python environment with `pip install -e ../../../laptop_brain` before building.
+  -->
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
