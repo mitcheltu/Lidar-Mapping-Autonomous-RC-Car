@@ -81,16 +81,18 @@ Remote Car/
 ├── docs/superpowers/plans/2026-07-12-lidar-navigation-autonomy.md  # 19-task TDD plan
 └── autonomous_rc_car/
     ├── README.md              # "Technical Spec" (ROS2/Nav2/KISS-ICP/PyVista vision — see §7)
-    ├── laptop_brain/          # Python: nav library + ROS2 nodes + viewer + tests
-    │   ├── nav/               # ALGORITHM LIBRARY (keep): grid, mapping, localization,
-    │   │                      #   frontier, planner, overlay, preview, voxel_viewer
-    │   ├── nodes/             # ROS2 nodes (currently plain scripts — must become rclpy):
-    │   │                      #   bridge, icp_slam, voxel_mapper, frontier_planner,
-    │   │                      #   motion_controller, calibration, stream_protocol, send_test_points
+    ├── ROS2_SETUP.md          # WSL2 + ROS2 Humble install / build / run guide
+    ├── ros2_ws/src/autonomous_rc_car_ros/  # ★ thin ament package: rclpy nodes that import nav.*
+    │                          #   (bridge_node real; voxel_mapper/frontier_planner/
+    │                          #    motion_controller/icp_slam nodes are stubs)
+    ├── laptop_brain/          # Python: nav LIBRARY + viewer + tests (pip-installable)
+    │   ├── pyproject.toml      # exposes `nav` as the `rc-car-nav` library
+    │   ├── nav/               # ★ ALGORITHM LIBRARY: grid, mapping, localization, frontier,
+    │   │                      #   planner, overlay, preview, voxel_viewer, stream_protocol
+    │   ├── nodes/             # pre-ROS2 CLI scripts + stream_protocol shim (being superseded)
     │   ├── pc_viewer.py       # ★ CANONICAL viewer: live Open3D + pose marker + camera + G-preview
-    │   ├── launch/            # ROS2 launch files (bringup, mapping) — stubs today
-    │   ├── tests/             # pytest suite (hardware-free)
-    │   └── captures/          # recorded point-cloud sessions (~216 MB — gitignore)
+    │   ├── tests/             # pytest suite (hardware-free, 57 passing)
+    │   └── captures/          # recorded point-cloud sessions (~216 MB — gitignored)
     ├── esp32_firmware/        # esp32_car.ino, tb6612 variant, platformio project
     └── ios_app/RCCarLidarStreamer/  # SwiftUI + ARKit app (see naming note in §8)
 ```

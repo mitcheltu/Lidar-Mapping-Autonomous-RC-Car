@@ -70,20 +70,31 @@ on recorded data → planning+control → iOS reverse channel → build car → 
 ## Phase 1 — Make ROS2 real (the foundation)
 
 - [x] **ROS2 host decided: WSL2 + Ubuntu 22.04 / ROS2 Humble** (2026-07-27).
-- [ ] Stand up WSL2 + ROS2 Humble; document setup; verify the phone can stream to
-      the WSL2 IP over the LAN. **← next major-validation checkpoint.**
-- [ ] **Create an ament_python package** for `autonomous_rc_car`: `package.xml`,
-      `setup.py`, `setup.cfg`, `resource/`, console_scripts entry points. Make
-      `colcon build` + `ros2 run` actually work.
+- [x] **Layout decided: Hybrid** — `nav/` stays the pip-installable tested library;
+      a thin ament package `autonomous_rc_car_ros` (under `ros2_ws/src/`) holds the
+      rclpy nodes that import `nav.*`.
+- [x] **Made `nav/` pip-installable** — `laptop_brain/pyproject.toml` (`rc-car-nav`),
+      moved the wire protocol into `nav/stream_protocol.py` (nodes/ shim kept). 57 tests green.
+- [x] **Wrote the WSL2/ROS2 setup guide** — `autonomous_rc_car/ROS2_SETUP.md`
+      (install, build/run, and the WSL2 networking fix so the phone can reach `bridge_node`).
+- [~] **Scaffolded the ament package** `ros2_ws/src/autonomous_rc_car_ros` (package.xml,
+      setup.py, entry points, `bridge_node` real + 4 stub nodes, launch). **Authored on
+      Windows — NOT yet built.**
+- [ ] **← NEXT MAJOR-VALIDATION CHECKPOINT:** in WSL2, `pip install -e laptop_brain`
+      + `colcon build` + `ros2 launch ... bringup.launch.py`; confirm the phone stream
+      reaches `bridge_node` and `/points` `/pose` `/image` publish. Report back before
+      the 4 stub nodes are implemented.
 - [ ] **Define the topic graph & messages** (reuse std/nav/sensor msgs where
       possible): `/points` (PointCloud2), `/pose` + `/pose_corrected`
       (PoseStamped), `/image` (CompressedImage), `/map` (OccupancyGrid),
       `/cmd_path` (Path), `/drive` (custom L/R or Twist).
 - [ ] **Convert `nodes/*.py` from scripts to real `rclpy` nodes** (keep them thin;
       the heavy logic stays in `nav/`):
+  - [x] Unified wire protocol: `stream_protocol.py` now covers points/pose/image;
+        `pc_viewer.py` uses it (one protocol for the viewer + future bridge). ✅
   - [ ] `bridge_node` — TCP server for the iPhone stream → publish `/points`
         `/pose` `/image`; subscribe `/drive` → send back over the reverse channel.
-        (Extend `stream_protocol.py` to cover pose + JPEG so there's one protocol.)
+        (Reuse `stream_protocol.py` for framing.)
   - [ ] `voxel_mapper_node` — subscribe `/points` `/pose`, call `nav.mapping`
         (clean → floor → grid → inflate), publish `/map`.
   - [ ] `frontier_planner_node` — subscribe `/map`, call `nav.frontier` +

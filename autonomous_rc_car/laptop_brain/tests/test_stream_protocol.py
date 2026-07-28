@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nodes.stream_protocol import (
+from nav.stream_protocol import (
     MESSAGE_TYPE_IMAGE,
     MESSAGE_TYPE_POINT_CLOUD,
     MESSAGE_TYPE_POSE,
@@ -14,6 +14,14 @@ from nodes.stream_protocol import (
     encode_pose_packet,
     parse_frame,
 )
+
+
+def test_nodes_shim_reexports_library_protocol():
+    # `from nodes.stream_protocol import ...` must still resolve to the same code.
+    from nodes import stream_protocol as shim
+    from nav import stream_protocol as lib
+    assert shim.decode_point_cloud_packet is lib.decode_point_cloud_packet
+    assert shim.MESSAGE_TYPE_POSE == lib.MESSAGE_TYPE_POSE
 
 
 def test_encode_decode_roundtrip_preserves_points_and_colors():

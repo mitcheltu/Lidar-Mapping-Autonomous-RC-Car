@@ -48,7 +48,7 @@ import cv2
 from nav.localization import pose_from_streamed, pose_to_2d
 from nav.preview import preview_plan
 from nav.voxel_viewer import build_overlay_geometry, prepare_point_cloud_geometry
-from nodes.stream_protocol import (
+from nav.stream_protocol import (
     MESSAGE_TYPE_IMAGE,
     MESSAGE_TYPE_POINT_CLOUD,
     MESSAGE_TYPE_POSE,
