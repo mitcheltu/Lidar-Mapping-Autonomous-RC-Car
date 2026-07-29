@@ -109,8 +109,10 @@ on recorded data → planning+control → iOS reverse channel → build car → 
         turn-then-drive `nav.controller.WaypointFollower`; reconstructs (x,z,theta)
         from `/pose` and publishes `L<left>R<right>` on `/drive` (stop when idle/done).
         (Will switch to `/pose_corrected` once `icp_slam_node` lands.)
-  - [ ] `icp_slam_node` — subscribe `/points` `/pose`, run KISS-ICP scan-to-map,
-        publish `/pose_corrected`.
+  - [x] `icp_slam_node` — **implemented.** Accumulates a map, aligns the recent scan
+        with Open3D ICP (`nav.drift`), refines a running correction on a timer, and
+        republishes `/pose` as `/pose_corrected` (large jumps rejected). All 5 nodes
+        now real. **Follow-up:** switch mapper/controller inputs to `/pose_corrected`.
 - [ ] **Wire the config yamls** — actually load `calibration_params.yaml`
       (extrinsics, robot radius, TURN_SIGN), `kiss_icp_params.yaml`; delete or
       populate `nav2_params.yaml` per the Phase-3 decision.

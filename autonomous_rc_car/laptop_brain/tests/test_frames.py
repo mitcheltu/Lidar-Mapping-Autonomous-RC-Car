@@ -4,6 +4,7 @@ import math
 
 from nav.frames import (
     A,
+    matrix_to_quaternion,
     points_arkit_to_ros,
     points_ros_to_arkit,
     quaternion_to_matrix,
@@ -61,3 +62,13 @@ def test_quaternion_identity_and_90deg():
     s = math.sin(math.pi / 4)
     R = quaternion_to_matrix(0, 0, s, s)
     assert np.allclose(R @ [1, 0, 0], [0, 1, 0], atol=1e-9)
+
+
+def test_matrix_quaternion_round_trip():
+    rng = np.random.default_rng(3)
+    q, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+    if np.linalg.det(q) < 0:
+        q[:, 0] = -q[:, 0]
+    quat = matrix_to_quaternion(q)
+    R = quaternion_to_matrix(*quat)
+    assert np.allclose(R, q, atol=1e-9)

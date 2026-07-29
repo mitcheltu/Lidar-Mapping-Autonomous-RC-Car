@@ -6,8 +6,8 @@ the mapping / planning / control / SLAM nodes. The heavy algorithms live in the
 pip-installable `nav` library (`autonomous_rc_car/laptop_brain`); the ROS nodes
 are thin wrappers around it.
 
-> Implemented: `bridge_node`, `voxel_mapper_node`, `frontier_planner_node`,
-> `motion_controller_node`. Still a **stub**: `icp_slam_node`.
+> All five nodes are implemented: `bridge_node`, `voxel_mapper_node`,
+> `frontier_planner_node`, `motion_controller_node`, `icp_slam_node`.
 
 ## Topic graph
 
@@ -27,8 +27,10 @@ are thin wrappers around it.
   Rebuilds the nav grid, locates the car cell, picks the nearest reachable frontier
   (`nav.frontier.choose_goal`) and plans an A* + line-of-sight path
   (`nav.planner.astar` / `simplify_path`). Empty path = exploration complete.
-- `icp_slam_node` (stub): `/points` + `/pose` -> `/pose_corrected` (PoseStamped)
-  via KISS-ICP scan-to-map.
+- `icp_slam_node` (real): `/points` + `/pose` -> `/pose_corrected` (PoseStamped).
+  Aligns the recent scan to an accumulated map with Open3D ICP (`nav.drift`),
+  refines a running drift correction, and applies it to the pose (large jumps
+  rejected).
 
 ## Build & run (WSL2, ROS2 Humble sourced)
 
