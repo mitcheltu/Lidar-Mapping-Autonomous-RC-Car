@@ -34,6 +34,7 @@ setup(
             'autonomous_rc_car_ros.motion_controller_node:main',
             'icp_slam_node = autonomous_rc_car_ros.icp_slam_node:main',
             'motion_enable_node = autonomous_rc_car_ros.motion_enable_node:main',
+            'rerun_viz_node = autonomous_rc_car_ros.rerun_viz_node:main',
         ],
     },
 )

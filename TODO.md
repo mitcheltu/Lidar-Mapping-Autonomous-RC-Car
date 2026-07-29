@@ -126,6 +126,10 @@ on recorded data → planning+control → iOS reverse channel → build car → 
 - [ ] Validate `voxel_mapper_node` `/map` against the `nav/` unit tests' behavior.
 - [ ] Integrate **KISS-ICP** in `icp_slam_node`; confirm drift correction on a
       recorded walkthrough (compare raw vs corrected trajectory).
+- [x] **Custom visualizer — `rerun_viz_node`** (Rerun). Streams `/points`, `/voxels/*`
+      (cubes), `/map`, `/cmd_path`, `/pose` to the Rerun viewer as toggleable entities;
+      viewer can run natively on Windows (`connect_addr`). See `VISUALIZER.md`.
+      `pip install rerun-sdk`. **Needs a live run to verify (rerun API version).**
 - [ ] Point `pc_viewer.py` at the ROS2 topics (or keep it on the raw stream) and
       overlay `/map` + `/cmd_path`. Move the preview off the GUI thread.
 - [x] **Categorized voxel viewer ("see the voxels").** `voxel_mapper_node` publishes

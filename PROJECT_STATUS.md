@@ -182,6 +182,7 @@ consider WSL2/Ubuntu or Docker for the laptop_brain (flagged in the plan).
 | `TODO.md` | Action tracker (done / remaining) | canonical |
 | `Build-Plan.md` | Origin story, full BOM tiers, autonomy roadmap, pitfalls | reference (stale paths) |
 | `autonomous_rc_car/DRIVING.md` | Features overview + ESP32 connect/tune + the reverse-channel gap | reference |
+| `autonomous_rc_car/VISUALIZER.md` | Custom Rerun viewer plan/usage (alternative to RViz2) | reference |
 | `autonomous_rc_car/ROS2_SETUP.md` | WSL2 + ROS2 Humble install / build / run | reference |
 | `Electronics-Shopping-List.md` | 4WD parts + wiring rules + bring-up order | reference |
 | `Navigation-Pipeline.md` | Algorithm design for map-building & frontier exploration | reference |

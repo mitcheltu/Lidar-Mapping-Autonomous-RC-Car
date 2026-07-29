@@ -49,6 +49,7 @@ pip3 install --upgrade pip setuptools wheel
 cd "/mnt/c/Users/mitch/OneDrive/Documents/Claude/Projects/Remote Car/autonomous_rc_car"
 pip3 install -e ./laptop_brain          # installs the rc-car-nav library (nav.*)
 # if editable still errors: pip3 install --no-build-isolation -e ./laptop_brain
+pip3 install rerun-sdk                   # optional: custom Rerun viewer (see VISUALIZER.md)
 ```
 
 > If `open3d` is heavy/slow to import in the mapping node, that's expected; it is a
