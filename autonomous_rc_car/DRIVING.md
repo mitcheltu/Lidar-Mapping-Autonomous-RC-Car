@@ -131,24 +131,34 @@ an editable install.)
 
 ---
 
-## Part 3b — Testing mode: compute + display the path, drive only on a button
+## Part 3b — Testing mode: plan on command, display it, drive only when you say go
 
-Safety gate so the car never moves unexpectedly. The planner always runs and shows
-`/cmd_path` in RViz; `motion_controller_node` always publishes the command it *would*
-send on **`/drive_intended`** (watch it: `ros2 topic echo /drive_intended`), but only
-sends real motion to `/drive` when **enabled**. Default is **HOLD**.
+Designed to be easy to watch and fully under your control:
+- **Planning is on-demand.** `frontier_planner_node` stores the latest `/map` + `/pose`
+  and computes **one** path only when you press **p**. `/cmd_path` is **latched**, so it
+  stays put in RViz instead of flickering (add a **Path** display on `/cmd_path`, set
+  its Durability to *Transient Local*).
+- **Motion is gated.** `motion_controller_node` always publishes what it *would* do on
+  `/drive_intended`, but only sends real motion to `/drive` when **enabled** (default
+  **HOLD**).
 
-Toggle with the laptop button node (its own terminal):
+Run the one control console (its own terminal) — it's also the status readout:
 ```bash
 ros2 run autonomous_rc_car_ros motion_enable_node
-#   SPACE / g = GO (drive)     h = HOLD (stop)     q = quit (also HOLDs)
 ```
-Or headless: `ros2 topic pub -1 /motion_enable std_msgs/Bool "{data: true}"`.
+```
+[HOLD] path:   14 wp | drive:      L0R0   (p=plan  g=go  h/SPACE=hold  q=quit)
+```
+- **p** — compute a fresh path (watch it appear in RViz and the `wp` count update).
+- **g** — GO: the car follows the current path; the `drive:` field shows the live
+  `L..R..` command.
+- **h** or **SPACE** — HOLD: commands `L0R0` immediately (SPACE = panic stop).
+- **q** — quit (also HOLDs).
 
-So the workflow is: watch the planned path + `/drive_intended`, and only when it
-looks right press **g** to let the car follow it. Releasing to HOLD (or quitting the
-button node) commands `L0R0`. `start_enabled:=true` overrides the default if you
-ever want it armed at launch.
+So you can't miss what it's doing: the console shows the path size and the exact drive
+command in real time, and nothing moves until you press **g**. (Want auto-replanning
+instead? launch the planner with `continuous:=true`; arm at boot with the controller's
+`start_enabled:=true`.)
 
 ## Part 4 — Getting `/drive` to the car
 

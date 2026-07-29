@@ -37,7 +37,9 @@ class MotionControllerNode(Node):
         self._pose2d = None      # (x, z, theta) in nav world
         self._follower = None
 
-        self.create_subscription(Path, '/cmd_path', self._on_path, 1)
+        path_qos = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
+                              durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(Path, '/cmd_path', self._on_path, path_qos)
         self.create_subscription(PoseStamped, '/pose', self._on_pose, 10)
         self._drive_pub = self.create_publisher(String, '/drive', 10)
         self._intended_pub = self.create_publisher(String, '/drive_intended', 10)
