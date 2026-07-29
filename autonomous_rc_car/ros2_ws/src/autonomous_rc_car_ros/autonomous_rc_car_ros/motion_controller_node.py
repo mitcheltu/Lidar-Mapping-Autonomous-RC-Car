@@ -15,9 +15,11 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 
+from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
+
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 from nav.controller import WaypointFollower
 from nav.frames import points_ros_to_arkit, quaternion_to_matrix, rotation_ros_to_arkit
@@ -28,7 +30,9 @@ class MotionControllerNode(Node):
     def __init__(self):
         super().__init__('motion_controller_node')
         self.declare_parameter('rate_hz', 10.0)
+        self.declare_parameter('start_enabled', False)   # testing mode: HOLD by default
         rate = self.get_parameter('rate_hz').get_parameter_value().double_value
+        self._enabled = self.get_parameter('start_enabled').get_parameter_value().bool_value
 
         self._pose2d = None      # (x, z, theta) in nav world
         self._follower = None
@@ -36,9 +40,18 @@ class MotionControllerNode(Node):
         self.create_subscription(Path, '/cmd_path', self._on_path, 1)
         self.create_subscription(PoseStamped, '/pose', self._on_pose, 10)
         self._drive_pub = self.create_publisher(String, '/drive', 10)
-        self.create_timer(1.0 / rate, self._tick)
+        self._intended_pub = self.create_publisher(String, '/drive_intended', 10)
 
-        self.get_logger().info('motion_controller_node up: /cmd_path + /pose -> /drive')
+        # Latched so the controller picks up the last GO/HOLD even if it (re)starts
+        # after the enable button.
+        latched = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
+                             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(Bool, '/motion_enable', self._on_enable, latched)
+
+        self.create_timer(1.0 / rate, self._tick)
+        self.get_logger().info(
+            'motion_controller_node up: /cmd_path + /pose -> /drive '
+            f'(motion {"ENABLED" if self._enabled else "HOLD"}; /drive_intended shows the plan)')
 
     def _on_pose(self, msg: PoseStamped):
         p, o = msg.pose.position, msg.pose.orientation
@@ -57,18 +70,25 @@ class MotionControllerNode(Node):
             wps.append((float(w[0]), float(w[2])))   # (world x, world z)
         self._follower = WaypointFollower(waypoints=wps) if wps else None
 
-    def _tick(self):
-        if self._follower is None or self._pose2d is None or self._follower.done:
-            self._publish(0, 0)
-            return
-        x, z, theta = self._pose2d
-        left, right = self._follower.update(x, z, theta)
-        self._publish(int(left), int(right))
+    def _on_enable(self, msg: Bool):
+        if msg.data != self._enabled:
+            self.get_logger().warn(
+                'MOTION ENABLED -- car will follow the path' if msg.data
+                else 'MOTION HOLD -- car stopped')
+        self._enabled = msg.data
 
-    def _publish(self, left, right):
-        msg = String()
-        msg.data = f'L{left}R{right}'
-        self._drive_pub.publish(msg)
+    def _tick(self):
+        left = right = 0
+        if self._follower is not None and self._pose2d is not None and not self._follower.done:
+            x, z, theta = self._pose2d
+            left, right = self._follower.update(x, z, theta)
+        # Always publish what the controller WOULD do (for display/preview)...
+        self._intended_pub.publish(String(data=f'L{int(left)}R{int(right)}'))
+        # ...but only actually drive when enabled; otherwise command a stop.
+        if self._enabled:
+            self._drive_pub.publish(String(data=f'L{int(left)}R{int(right)}'))
+        else:
+            self._drive_pub.publish(String(data='L0R0'))
 
 
 def main(args=None):

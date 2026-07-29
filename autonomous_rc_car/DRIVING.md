@@ -37,14 +37,13 @@ published in one **Z-up `map` frame**, viewable in RViz2 (`/points`, `/map`,
 |---|---|
 | Phone scan → laptop stream | ✅ working |
 | SLAM / map / voxels / frontier / A* path | ✅ working, live in RViz |
-| `motion_controller` computing `L..R..` on `/drive` | ✅ working (watch `ros2 topic echo /drive`) |
-| `bridge_node` relaying `/drive` back to the phone socket | ✅ working |
-| **iPhone receiving the relay and calling `CarController.drive()`** | ❌ **NOT implemented** (see Part 4) |
-| ESP32 + motors built and flashed | ❌ hardware not built yet |
+| `motion_controller` computing `L..R..` on `/drive` (with GO/HOLD gate) | ✅ working |
+| ESP32 + TB6612 + motors, WiFi websocket control | ✅ **built and working** (user's own firmware) |
+| **Laptop → ESP32 driver (`/drive` → ESP32 websocket)** | ⏳ **to build** — needs the ESP32's websocket command format (Part 4) |
 
-So the **decision brain is complete end-to-end in software**; two things remain to
-move real wheels: build the car (Part 2–3) and add the phone's reverse-channel
-relay (Part 4).
+So the **decision brain is complete end-to-end in software** and the car is built;
+the one remaining link is a `car_driver_node` that forwards `/drive` to the ESP32
+over WiFi (Part 4).
 
 ---
 
@@ -132,12 +131,37 @@ an editable install.)
 
 ---
 
-## Part 4 — Closing the loop: the phone reverse-channel (remaining work)
+## Part 3b — Testing mode: compute + display the path, drive only on a button
 
-Today `bridge_node` relays `/drive` back over the socket as a framed message
-(type `0x44 'D'`, ASCII `L..R..`). **The iOS app does not yet read it.**
-`CarController.swift` can drive the ESP32 (`drive(left:right:)`), but nothing calls
-it. To finish the loop, the app needs (plan Tasks 17–18):
+Safety gate so the car never moves unexpectedly. The planner always runs and shows
+`/cmd_path` in RViz; `motion_controller_node` always publishes the command it *would*
+send on **`/drive_intended`** (watch it: `ros2 topic echo /drive_intended`), but only
+sends real motion to `/drive` when **enabled**. Default is **HOLD**.
+
+Toggle with the laptop button node (its own terminal):
+```bash
+ros2 run autonomous_rc_car_ros motion_enable_node
+#   SPACE / g = GO (drive)     h = HOLD (stop)     q = quit (also HOLDs)
+```
+Or headless: `ros2 topic pub -1 /motion_enable std_msgs/Bool "{data: true}"`.
+
+So the workflow is: watch the planned path + `/drive_intended`, and only when it
+looks right press **g** to let the car follow it. Releasing to HOLD (or quitting the
+button node) commands `L0R0`. `start_enabled:=true` overrides the default if you
+ever want it armed at launch.
+
+## Part 4 — Getting `/drive` to the car
+
+**Recommended (your WiFi ESP32):** drive the ESP32 **directly from the laptop over
+WiFi**. A `car_driver_node` subscribes to `/drive` and forwards each `L..R..` to the
+ESP32's websocket (the same channel your HTML control page uses). The phone stays a
+pure perception sensor; **no BLE and no iOS changes needed**. This is the intended
+path now — tell me your ESP32's websocket command format and I'll write the node.
+
+**Alternative (BLE via the phone):** if you ever go BLE instead, `bridge_node`
+already relays `/drive` back over the socket as a framed message (type `0x44 'D'`,
+ASCII `L..R..`), but **the iOS app does not yet read it.** `CarController.swift` can
+drive the ESP32, but nothing calls it. Finishing that path needs (plan Tasks 17–18):
 
 1. **Receive** in `PointCloudStreamer.swift`: a read loop on the TCP socket that
    parses inbound `type(1) + len(u32 LE) + payload` frames; on `0x44`, decode the
