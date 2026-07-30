@@ -106,6 +106,18 @@ class RerunVizNode(Node):
             axis_length=0.3))
 
 
+def _connect_viewer(addr):
+    """Connect to an already-running Rerun viewer, tolerant of API changes across
+    rerun-sdk versions (connect_grpc in newer, connect_tcp / connect in older)."""
+    if hasattr(rr, 'connect_grpc'):
+        url = addr if addr.startswith('rerun+') else f'rerun+http://{addr}/proxy'
+        rr.connect_grpc(url)
+    elif hasattr(rr, 'connect_tcp'):
+        rr.connect_tcp(addr)
+    else:
+        rr.connect(addr)
+
+
 def main(args=None):
     if rr is None:
         print('rerun-sdk not installed. Run:  pip install rerun-sdk')
@@ -115,7 +127,7 @@ def main(args=None):
     connect = node.declare_parameter('connect_addr', '').get_parameter_value().string_value
     rr.init('rc_car_viz')
     if connect:
-        rr.connect_tcp(connect)          # viewer running elsewhere (e.g. Windows)
+        _connect_viewer(connect)          # viewer running elsewhere (e.g. Windows)
     else:
         rr.spawn()                        # open the viewer locally (WSLg)
     rr.log('world', rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
