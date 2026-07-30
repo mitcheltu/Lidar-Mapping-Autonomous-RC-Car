@@ -23,6 +23,8 @@ from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from visualization_msgs.msg import MarkerArray
 
+from nav.frames import quaternion_to_matrix
+
 try:
     import rerun as rr
 except ImportError:
@@ -38,18 +40,28 @@ class RerunVizNode(Node):
         latched = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
                              durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
 
-        self.create_subscription(PointCloud2, '/points', self._on_cloud, 10)
+        self.create_subscription(PointCloud2, '/points', self._g(self._on_cloud), 10)
         self.create_subscription(
             MarkerArray, '/voxels/ground',
-            lambda m: self._on_voxels(m, 'world/voxels/ground', GROUND), 1)
+            self._g(lambda m: self._on_voxels(m, 'world/voxels/ground', GROUND)), 1)
         self.create_subscription(
             MarkerArray, '/voxels/obstacle',
-            lambda m: self._on_voxels(m, 'world/voxels/obstacle', OBSTACLE), 1)
-        self.create_subscription(OccupancyGrid, '/map', self._on_map, 1)
-        self.create_subscription(Path, '/cmd_path', self._on_path, latched)
-        self.create_subscription(PoseStamped, '/pose', self._on_pose, 10)
+            self._g(lambda m: self._on_voxels(m, 'world/voxels/obstacle', OBSTACLE)), 1)
+        self.create_subscription(OccupancyGrid, '/map', self._g(self._on_map), 1)
+        self.create_subscription(Path, '/cmd_path', self._g(self._on_path), latched)
+        self.create_subscription(PoseStamped, '/pose', self._g(self._on_pose), 10)
 
         self.get_logger().info('rerun_viz_node up: streaming ROS topics to Rerun')
+
+    def _g(self, fn):
+        """Wrap a callback so a Rerun/API error logs a warning instead of killing
+        the node (Rerun's Python API varies by version)."""
+        def wrapped(msg):
+            try:
+                fn(msg)
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().warn(f'viz log error: {exc}', throttle_duration_sec=5.0)
+        return wrapped
 
     def _on_cloud(self, msg: PointCloud2):
         pts = point_cloud2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)
@@ -99,11 +111,14 @@ class RerunVizNode(Node):
 
     def _on_pose(self, msg: PoseStamped):
         p, o = msg.pose.position, msg.pose.orientation
-        rr.log('world/phone', rr.Points3D([[p.x, p.y, p.z]], radii=0.05, colors=(255, 220, 0)))
-        rr.log('world/phone/axes', rr.Transform3D(
-            translation=[p.x, p.y, p.z],
-            rotation=rr.Quaternion(xyzw=[o.x, o.y, o.z, o.w]),
-            axis_length=0.3))
+        pos = np.array([p.x, p.y, p.z], dtype=np.float32)
+        rr.log('world/phone', rr.Points3D([pos], radii=0.05, colors=(255, 220, 0)))
+        # Draw pose axes as three arrows (version-proof, unlike Transform3D kwargs).
+        R = quaternion_to_matrix(o.x, o.y, o.z, o.w)
+        vectors = (np.array([R[:, 0], R[:, 1], R[:, 2]], dtype=np.float32) * 0.3)
+        rr.log('world/phone/axes', rr.Arrows3D(
+            origins=np.tile(pos, (3, 1)), vectors=vectors,
+            colors=[(255, 0, 0), (0, 255, 0), (0, 0, 255)]))
 
 
 def _connect_viewer(addr):
