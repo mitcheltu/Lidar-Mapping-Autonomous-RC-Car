@@ -142,7 +142,12 @@ Designed to be easy to watch and fully under your control:
   `/drive_intended`, but only sends real motion to `/drive` when **enabled** (default
   **HOLD**).
 
-Run the one control console (its own terminal) — it's also the status readout:
+Boot the whole stack — graph, visualizer, and this console — with one command:
+```bash
+cd autonomous_rc_car && ./run.sh
+```
+(Or run just the console against an already-running graph, in its own terminal —
+it needs a real TTY, so it can never be part of a launch file:)
 ```bash
 ros2 run autonomous_rc_car_ros motion_enable_node
 ```
@@ -157,8 +162,7 @@ ros2 run autonomous_rc_car_ros motion_enable_node
 
 So you can't miss what it's doing: the console shows the path size and the exact drive
 command in real time, and nothing moves until you press **g**. (Want auto-replanning
-instead? launch the planner with `continuous:=true`; arm at boot with the controller's
-`start_enabled:=true`.)
+instead? `./run.sh --continuous`; arm at boot with `./run.sh --go`.)
 
 ## Part 4 — Getting `/drive` to the car
 

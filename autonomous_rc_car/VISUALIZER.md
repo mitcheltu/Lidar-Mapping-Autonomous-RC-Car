@@ -37,14 +37,26 @@ pip install rerun-sdk
 ```
 
 ## Run
+
+**Normally you don't run this node yourself** — `autonomous_rc_car/run.sh` starts it
+with the rest of the graph:
+```bash
+cd autonomous_rc_car && ./run.sh
+```
+It defaults to connecting to a **Rerun viewer running natively on Windows**
+(recommended for performance): start `rerun` on Windows first — from a
+`pip install rerun-sdk` there, or the Rerun desktop app — and `run.sh` auto-detects
+the host address. If nothing answers on port 9876 it falls back to a WSLg viewer.
+
+`./run.sh --spawn` forces the WSLg viewer; `./run.sh --connect <host>:9876` sets the
+address explicitly; `./run.sh --no-viz` leaves the visualizer out.
+
+Standalone, against a graph that is already running:
 ```bash
 # spawn the viewer via WSLg:
 ros2 run autonomous_rc_car_ros rerun_viz_node
-```
-To view on **Windows** instead (recommended for performance): run `rerun` on Windows
-(from a `pip install rerun-sdk` there, or the Rerun desktop app), then start the node
-pointed at it:
-```bash
+
+# or point it at a viewer on Windows:
 ros2 run autonomous_rc_car_ros rerun_viz_node --ros-args -p connect_addr:=<windows-ip>:9876
 ```
 

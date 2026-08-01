@@ -24,11 +24,16 @@ Proven-architecture reference: **RoBart** (iPhone-brain + BLE microcontroller).
 | `pc_viewer.py` walkthrough preview (`G` key) | **Working** — map the room with just the phone, no car |
 | Car hardware (chassis/motors/H-bridge) | **Not built** — parts not purchased; ESP32 owned but unwired |
 | ESP32 firmware (`esp32_car.ino`) | Written, **not flashed/field-tested** |
-| ROS2 ament package (`autonomous_rc_car_ros`) | **Real** — builds/runs in WSL2. All 5 nodes implemented: `bridge_node`, `voxel_mapper_node` (incremental log-odds voxels + ray carving), `frontier_planner_node` (A* path), `motion_controller_node` (drive cmds), `icp_slam_node` (ICP drift correction). Unified Z-up `map` frame. |
+| ROS2 ament package (`autonomous_rc_car_ros`) | **Real** — builds/runs in WSL2. All 7 nodes implemented: `bridge_node`, `voxel_mapper_node` (incremental log-odds voxels + ray carving), `frontier_planner_node` (A* path), `motion_controller_node` (drive cmds), `icp_slam_node` (ICP drift correction), `motion_enable_node` (control console), `rerun_viz_node` (visualizer). Unified Z-up `map` frame. One-command bringup via `run.sh`. |
 | Autonomy driving loop (Milestone B) | **Software complete** — full perception→SLAM→plan→drive chain wired and unit-tested. Remaining is hardware: build the car, flash/tune the ESP32, field test. |
 
 **Bottom line:** the only end-to-end runnable path is **phone + laptop** (scan a
 room, watch/preview the map). Nothing drives yet.
+
+**How to run it:** one command in WSL2 — `cd autonomous_rc_car && ./run.sh`. It
+builds if needed, starts the six-node graph plus the Rerun visualizer, and gives
+this terminal the control console (`p` plan, `g` GO, `h`/SPACE HOLD, `q` quit).
+Details and flags in `ROS2_SETUP.md` §4.
 
 ## 3. Architecture — **canonical: ROS2 + Nav2 on the laptop**
 
@@ -80,6 +85,7 @@ Remote Car/
 ├── Navigation-Pipeline.md     # point-cloud → navigable-map algorithm design
 ├── docs/superpowers/plans/2026-07-12-lidar-navigation-autonomy.md  # 19-task TDD plan
 └── autonomous_rc_car/
+    ├── run.sh                 # ★ ONE-COMMAND LAUNCHER: graph + Rerun + control console
     ├── README.md              # "Technical Spec" (ROS2/Nav2/KISS-ICP/PyVista vision — see §7)
     ├── ROS2_SETUP.md          # WSL2 + ROS2 Humble install / build / run guide
     ├── ros2_ws/src/autonomous_rc_car_ros/  # ★ thin ament package: rclpy nodes that import nav.*

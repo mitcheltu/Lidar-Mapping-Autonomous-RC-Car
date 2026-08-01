@@ -1,0 +1,4 @@
+# This repo is authored on Windows (core.autocrlf=true) but the shell scripts and
+# ROS2 package run under WSL2. A CRLF checkout breaks them at the shebang
+# ("bad interpreter: /usr/bin/env bash^M"), so pin them to LF.
+*.sh text eol=lf

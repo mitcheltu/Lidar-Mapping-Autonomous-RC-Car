@@ -6,8 +6,9 @@ the mapping / planning / control / SLAM nodes. The heavy algorithms live in the
 pip-installable `nav` library (`autonomous_rc_car/laptop_brain`); the ROS nodes
 are thin wrappers around it.
 
-> All five nodes are implemented: `bridge_node`, `voxel_mapper_node`,
-> `frontier_planner_node`, `motion_controller_node`, `icp_slam_node`.
+> All seven nodes are implemented: `bridge_node`, `voxel_mapper_node`,
+> `frontier_planner_node`, `motion_controller_node`, `icp_slam_node`,
+> `motion_enable_node` (control console), `rerun_viz_node` (visualizer).
 
 ## Topic graph
 
@@ -37,14 +38,28 @@ are thin wrappers around it.
 This package must be built and run under Linux/WSL2 — there is no ROS2 on
 Windows. The files are authored on Windows only.
 
+Once the `nav` library is installed (`pip install -e ../../../laptop_brain`), the
+whole stack boots with one command from `autonomous_rc_car/`:
+
 ```bash
-# in the ROS2 workspace (WSL2, ROS2 Humble sourced)
-pip install -e ../../../laptop_brain          # install the nav library
+./run.sh            # build if needed + graph + Rerun + control console
+./run.sh --help     # flags
+```
+
+By hand:
+
+```bash
 cd autonomous_rc_car/ros2_ws
 colcon build --packages-select autonomous_rc_car_ros
 source install/setup.bash
 ros2 launch autonomous_rc_car_ros bringup.launch.py
+# args: viz:=true|false  connect_addr:=host:9876  continuous:=  start_enabled:=
+ros2 run autonomous_rc_car_ros motion_enable_node   # separate terminal
 ```
+
+`bringup.launch.py` starts six nodes; `motion_enable_node` is deliberately not one
+of them — it calls `tty.setraw` on stdin, and a launched process gets a pipe rather
+than a TTY. `run.sh` therefore runs it in the foreground of your terminal.
 
 The `nav` library is a **pip dependency**, not a rosdep/ament package — install
 it into the same Python environment before `colcon build`.

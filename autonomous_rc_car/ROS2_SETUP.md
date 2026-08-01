@@ -55,18 +55,57 @@ pip3 install rerun-sdk                   # optional: custom Rerun viewer (see VI
 > If `open3d` is heavy/slow to import in the mapping node, that's expected; it is a
 > real dependency of `nav.mapping`.
 
-## 4. Build + run the ROS2 package
+## 4. Run it — one command
+
+```bash
+cd autonomous_rc_car
+./run.sh
+```
+
+That is the whole thing. `run.sh` sources ROS2 + the workspace, builds if the
+workspace has never been built, starts all six background nodes plus the Rerun
+visualizer, and then hands this terminal to the control console
+(`p` = plan, `g` = GO, `h`/SPACE = HOLD, `q` = quit). Quitting shuts the whole
+graph down.
+
+By default it connects to a **Rerun viewer running natively on Windows** — start
+`rerun` on Windows first for the fast path. If nothing is listening it says so and
+falls back to a WSLg viewer.
+
+Node logs would overwrite the console's status line, so they go to
+`/tmp/rc_car_graph.log` (`tail -f` it in another terminal, or pass `--verbose`).
+
+Useful flags:
+
+```bash
+./run.sh --build                    # force a colcon build first
+./run.sh --connect 192.168.1.50:9876  # explicit Rerun viewer address
+./run.sh --spawn                    # Rerun inside WSL via WSLg instead
+./run.sh --no-viz                   # no visualizer
+./run.sh --no-console               # graph only (console elsewhere)
+./run.sh --continuous               # replan on every /map, not just on p
+./run.sh --help
+```
+
+### Doing it by hand
 
 ```bash
 cd autonomous_rc_car/ros2_ws
 colcon build --packages-select autonomous_rc_car_ros
 source install/setup.bash
-ros2 launch autonomous_rc_car_ros bringup.launch.py
+ros2 launch autonomous_rc_car_ros bringup.launch.py   # args: viz, connect_addr,
+                                                      # continuous, start_enabled
+ros2 run autonomous_rc_car_ros motion_enable_node     # separate terminal (needs a TTY)
 ```
 
-Currently only `bridge_node` is implemented; the other four (`voxel_mapper_node`,
-`frontier_planner_node`, `motion_controller_node`, `icp_slam_node`) are stubs that
-log a TODO. Fill them in per `TODO.md` Phase 1/2/3.
+All seven nodes are implemented — `bridge_node`, `voxel_mapper_node`,
+`frontier_planner_node`, `motion_controller_node`, `icp_slam_node`,
+`motion_enable_node`, `rerun_viz_node`. Note that `motion_enable_node` puts the
+terminal in raw mode to read keys, so it cannot be part of a launch file; that is
+why `run.sh` runs it in the foreground.
+
+> The workspace is built **without** `--symlink-install`, so editing a node's
+> Python source needs a rebuild: `./run.sh --build`.
 
 ## 5. ⚠️ WSL2 networking — let the phone reach `bridge_node`
 
