@@ -11,6 +11,7 @@ dependencies = [
     "numpy",
     "scipy",
     "open3d",
+    "pyyaml",       # calibration.yaml
 ]
 
 [project.optional-dependencies]

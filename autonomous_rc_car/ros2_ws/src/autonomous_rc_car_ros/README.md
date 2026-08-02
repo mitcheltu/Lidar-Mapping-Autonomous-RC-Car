@@ -6,9 +6,10 @@ the mapping / planning / control / SLAM nodes. The heavy algorithms live in the
 pip-installable `nav` library (`autonomous_rc_car/laptop_brain`); the ROS nodes
 are thin wrappers around it.
 
-> All seven nodes are implemented: `bridge_node`, `voxel_mapper_node`,
+> All nine nodes are implemented: `bridge_node`, `voxel_mapper_node`,
 > `frontier_planner_node`, `motion_controller_node`, `icp_slam_node`,
-> `motion_enable_node` (control console), `rerun_viz_node` (visualizer).
+> `motion_enable_node` (control console), `rerun_viz_node` (visualizer),
+> `car_driver_node` (ESP32 link) and `calibration_node`.
 
 ## Topic graph
 
@@ -32,6 +33,16 @@ are thin wrappers around it.
   Aligns the recent scan to an accumulated map with Open3D ICP (`nav.drift`),
   refines a running drift correction, and applies it to the pose (large jumps
   rejected).
+- `car_driver_node` (real): `/drive` -> the ESP32 over TCP (`host`:`port`, default
+  `rccar.local`:9001). Applies the measured calibration (deadband, straightness
+  trim) from `nav.config`, reconnects on its own, publishes `/car_link`. Obeys
+  `/drive_raw` instead of `/drive` while `/calibration_active` is true, so exactly
+  one thing owns the motors at a time.
+- `calibration_node` (real): on `/calibrate_trigger` (the console's `c`), drives a
+  scripted sequence and measures it against `/pose` to produce
+  `config/calibration.yaml` -- turn sign, deadband, linear/angular gain,
+  straightness trim, command latency. Publishes `/calibration_status`,
+  `/calibration_active` and `/calibration_result`. Aborts on `/motion_enable` false.
 
 ## Build & run (WSL2, ROS2 Humble sourced)
 
@@ -57,7 +68,7 @@ ros2 launch autonomous_rc_car_ros bringup.launch.py
 ros2 run autonomous_rc_car_ros motion_enable_node   # separate terminal
 ```
 
-`bringup.launch.py` starts six nodes; `motion_enable_node` is deliberately not one
+`bringup.launch.py` starts eight nodes; `motion_enable_node` is deliberately not one
 of them — it calls `tty.setraw` on stdin, and a launched process gets a pipe rather
 than a TTY. `run.sh` therefore runs it in the foreground of your terminal.
 

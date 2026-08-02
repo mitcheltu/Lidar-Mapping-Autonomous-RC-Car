@@ -63,10 +63,18 @@ cd autonomous_rc_car
 ```
 
 That is the whole thing. `run.sh` sources ROS2 + the workspace, builds if the
-workspace has never been built, starts all six background nodes plus the Rerun
+workspace has never been built, starts all eight background nodes plus the Rerun
 visualizer, and then hands this terminal to the control console
-(`p` = plan, `g` = GO, `h`/SPACE = HOLD, `q` = quit). Quitting shuts the whole
-graph down.
+(`c` = calibrate, `p` = plan, `g` = GO, `h`/SPACE = HOLD, `q` = quit). Quitting
+shuts the whole graph down.
+
+Once the ESP32 is flashed, point the driver at it:
+
+```bash
+./run.sh --car 192.168.1.xx          # or --car rccar.local
+```
+
+See `DRIVING.md` Parts 4–5 for flashing, the bench test and calibration.
 
 By default it connects to a **Rerun viewer running natively on Windows** — start
 `rerun` on Windows first for the fast path. If nothing is listening it says so and
@@ -78,6 +86,7 @@ Node logs would overwrite the console's status line, so they go to
 Useful flags:
 
 ```bash
+./run.sh --car 192.168.1.xx         # ESP32 address (default rccar.local:9001)
 ./run.sh --build                    # force a colcon build first
 ./run.sh --connect 192.168.1.50:9876  # explicit Rerun viewer address
 ./run.sh --spawn                    # Rerun inside WSL via WSLg instead
@@ -98,9 +107,10 @@ ros2 launch autonomous_rc_car_ros bringup.launch.py   # args: viz, connect_addr,
 ros2 run autonomous_rc_car_ros motion_enable_node     # separate terminal (needs a TTY)
 ```
 
-All seven nodes are implemented — `bridge_node`, `voxel_mapper_node`,
+All nine nodes are implemented — `bridge_node`, `voxel_mapper_node`,
 `frontier_planner_node`, `motion_controller_node`, `icp_slam_node`,
-`motion_enable_node`, `rerun_viz_node`. Note that `motion_enable_node` puts the
+`motion_enable_node`, `rerun_viz_node`, `car_driver_node`, `calibration_node`.
+Note that `motion_enable_node` puts the
 terminal in raw mode to read keys, so it cannot be part of a launch file; that is
 why `run.sh` runs it in the foreground.
 

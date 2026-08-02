@@ -24,16 +24,20 @@ Proven-architecture reference: **RoBart** (iPhone-brain + BLE microcontroller).
 | `pc_viewer.py` walkthrough preview (`G` key) | **Working** — map the room with just the phone, no car |
 | Car hardware (chassis/motors/H-bridge) | **Not built** — parts not purchased; ESP32 owned but unwired |
 | ESP32 firmware (`esp32_car.ino`) | Written, **not flashed/field-tested** |
-| ROS2 ament package (`autonomous_rc_car_ros`) | **Real** — builds/runs in WSL2. All 7 nodes implemented: `bridge_node`, `voxel_mapper_node` (incremental log-odds voxels + ray carving), `frontier_planner_node` (A* path), `motion_controller_node` (drive cmds), `icp_slam_node` (ICP drift correction), `motion_enable_node` (control console), `rerun_viz_node` (visualizer). Unified Z-up `map` frame. One-command bringup via `run.sh`. |
-| Autonomy driving loop (Milestone B) | **Software complete** — full perception→SLAM→plan→drive chain wired and unit-tested. Remaining is hardware: build the car, flash/tune the ESP32, field test. |
+| ROS2 ament package (`autonomous_rc_car_ros`) | **Real** — builds/runs in WSL2. All 9 nodes implemented: `bridge_node`, `voxel_mapper_node` (incremental log-odds voxels + ray carving), `frontier_planner_node` (A* path), `motion_controller_node` (drive cmds), `icp_slam_node` (ICP drift correction), `motion_enable_node` (control console), `rerun_viz_node` (visualizer), `car_driver_node` (`/drive` → ESP32 over WiFi), `calibration_node`. Unified Z-up `map` frame. One-command bringup via `run.sh`. |
+| ESP32 firmware for this car (`esp32_car_wifi_tb6612.ino`) | **Written, not flashed** — TB6612 on GPIO 18/19/23 + 16/17/21, STBY 22; WiFi TCP line server on :9001 |
+| Drive calibration (`c` in the console) | **Written, not field-run** — measures turn sign, deadband, linear/angular gain, straightness trim and command latency against the ARKit pose; writes `config/calibration.yaml`, applied live |
+| Autonomy driving loop (Milestone B) | **Software complete end-to-end** — perception→SLAM→plan→drive→motors all wired and unit-tested (118 tests). Remaining is physical: flash the ESP32, bench test, calibrate, field test. |
 
-**Bottom line:** the only end-to-end runnable path is **phone + laptop** (scan a
-room, watch/preview the map). Nothing drives yet.
+**Bottom line:** the software chain is complete from LiDAR to motor command. The
+car has never actually driven under it — flashing `esp32_car_wifi_tb6612.ino`,
+bench-testing the link, and running calibration are the next physical steps.
 
-**How to run it:** one command in WSL2 — `cd autonomous_rc_car && ./run.sh`. It
-builds if needed, starts the six-node graph plus the Rerun visualizer, and gives
-this terminal the control console (`p` plan, `g` GO, `h`/SPACE HOLD, `q` quit).
-Details and flags in `ROS2_SETUP.md` §4.
+**How to run it:** one command in WSL2 — `cd autonomous_rc_car && ./run.sh`
+(add `--car <esp32-ip>` once the car is flashed). It builds if needed, starts the
+eight-node graph plus the Rerun visualizer, and gives this terminal the control
+console (`c` calibrate, `p` plan, `g` GO, `h`/SPACE HOLD, `q` quit). Details and
+flags in `ROS2_SETUP.md` §4; the car/calibration workflow is `DRIVING.md` Parts 4–5.
 
 ## 3. Architecture — **canonical: ROS2 + Nav2 on the laptop**
 

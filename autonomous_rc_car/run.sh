@@ -23,6 +23,8 @@ WANT_CONSOLE=1
 FORCE_SPAWN=0
 VERBOSE=0
 GRAPH_LOG="${GRAPH_LOG:-/tmp/rc_car_graph.log}"
+CAR_HOST="${CAR_HOST:-rccar.local}"
+CAR_PORT="${CAR_PORT:-9001}"
 CONNECT_ADDR=""
 CONTINUOUS=false
 START_ENABLED=false
@@ -32,11 +34,15 @@ usage() {
 Usage: ./run.sh [options]
 
 Boots the full ROS2 graph + Rerun visualizer, then the control console.
-Console keys once running:  p = plan   g = GO   h/SPACE = HOLD   q = quit
+Console keys once running:
+  c = calibrate   p = plan   g = GO   h/SPACE = HOLD/abort   q = quit
 
 Options:
   --build            colcon build before launching (also automatic if the
                      workspace has never been built)
+  --car HOST[:PORT]  ESP32 address for car_driver_node.
+                     Default: $CAR_HOST:$CAR_PORT. The sketch prints its IP
+                     on serial at boot; use that if mDNS does not resolve.
   --connect ADDR     Rerun viewer to connect to, e.g. 192.168.1.50:9876.
                      Default: auto-detect the Windows host.
   --spawn            Run the Rerun viewer inside WSL via WSLg instead of
@@ -57,6 +63,10 @@ while [ $# -gt 0 ]; do
         --build)      DO_BUILD=1 ;;
         --connect)    CONNECT_ADDR="${2:-}"; shift
                       [ -n "$CONNECT_ADDR" ] || { echo "--connect needs an address" >&2; exit 2; } ;;
+        --car)        car_arg="${2:-}"; shift
+                      [ -n "$car_arg" ] || { echo "--car needs a host" >&2; exit 2; }
+                      CAR_HOST="${car_arg%%:*}"
+                      case "$car_arg" in *:*) CAR_PORT="${car_arg##*:}" ;; esac ;;
         --spawn)      FORCE_SPAWN=1 ;;
         --no-viz)     WANT_VIZ=0 ;;
         --no-console) WANT_CONSOLE=0 ;;
@@ -169,18 +179,23 @@ if [ "$QUIET_LOG" -eq 1 ]; then
         viz:="$VIZ" \
         connect_addr:="$CONNECT_ADDR" \
         continuous:="$CONTINUOUS" \
-        start_enabled:="$START_ENABLED" > "$GRAPH_LOG" 2>&1 &
+        start_enabled:="$START_ENABLED" \
+        car_host:="$CAR_HOST" \
+        car_port:="$CAR_PORT" > "$GRAPH_LOG" 2>&1 &
 else
     setsid ros2 launch autonomous_rc_car_ros bringup.launch.py \
         viz:="$VIZ" \
         connect_addr:="$CONNECT_ADDR" \
         continuous:="$CONTINUOUS" \
-        start_enabled:="$START_ENABLED" &
+        start_enabled:="$START_ENABLED" \
+        car_host:="$CAR_HOST" \
+        car_port:="$CAR_PORT" &
 fi
 LAUNCH_PID=$!
 
 echo "Graph starting (pid $LAUNCH_PID)."
 echo "Point the iPhone app at this laptop, port 9000."
+echo "Car: $CAR_HOST:$CAR_PORT   (console shows the link state)"
 
 if [ "$WANT_CONSOLE" -eq 0 ]; then
     echo "No console (--no-console). Ctrl-C to stop."

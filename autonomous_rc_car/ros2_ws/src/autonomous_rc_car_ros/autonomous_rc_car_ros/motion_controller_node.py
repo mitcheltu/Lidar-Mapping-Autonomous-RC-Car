@@ -21,6 +21,7 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from std_msgs.msg import Bool, String
 
+from nav import config
 from nav.controller import WaypointFollower
 from nav.frames import points_ros_to_arkit, quaternion_to_matrix, rotation_ros_to_arkit
 from nav.localization import pose_to_2d
@@ -49,6 +50,10 @@ class MotionControllerNode(Node):
         latched = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
                              durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(Bool, '/motion_enable', self._on_enable, latched)
+        # TURN_SIGN comes from the calibration file; re-read it when calibration
+        # writes a fresh one so the car turns the right way without a restart.
+        self.create_subscription(String, '/calibration_result',
+                                 self._on_calibration_result, latched)
 
         self.create_timer(1.0 / rate, self._tick)
         self.get_logger().info(
@@ -78,6 +83,11 @@ class MotionControllerNode(Node):
                 'MOTION ENABLED -- car will follow the path' if msg.data
                 else 'MOTION HOLD -- car stopped')
         self._enabled = msg.data
+
+    def _on_calibration_result(self, msg: String):
+        cal = config.reload_calibration()
+        self.get_logger().info(
+            f'reloaded calibration from {msg.data}: turn_sign {cal.turn_sign}')
 
     def _tick(self):
         left = right = 0

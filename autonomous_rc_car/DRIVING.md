@@ -38,77 +38,89 @@ published in one **Z-up `map` frame**, viewable in RViz2 (`/points`, `/map`,
 | Phone scan → laptop stream | ✅ working |
 | SLAM / map / voxels / frontier / A* path | ✅ working, live in RViz |
 | `motion_controller` computing `L..R..` on `/drive` (with GO/HOLD gate) | ✅ working |
-| ESP32 + TB6612 + motors, WiFi websocket control | ✅ **built and working** (user's own firmware) |
-| **Laptop → ESP32 driver (`/drive` → ESP32 websocket)** | ⏳ **to build** — needs the ESP32's websocket command format (Part 4) |
+| ESP32 + TB6612 + motors | ✅ **built** |
+| Laptop → ESP32 driver (`car_driver_node` → WiFi TCP) | ✅ **written** — needs flashing + a field test (Part 4) |
+| Drive calibration against the phone's pose | ✅ **written** — needs a field run (Part 5) |
 
-So the **decision brain is complete end-to-end in software** and the car is built;
-the one remaining link is a `car_driver_node` that forwards `/drive` to the ESP32
-over WiFi (Part 4).
+So the chain is complete in software from LiDAR to motor command. What remains is
+physical: flash `esp32_car_wifi_tb6612.ino`, confirm the link, calibrate, drive.
 
 ---
 
 ## Part 2 — Connect the ESP32 (hardware + firmware)
 
-Parts and full wiring rules are in `Electronics-Shopping-List.md`. Firmware is
-`esp32_firmware/src/esp32_car.ino` (L298N) and `esp32_car_tb6612.ino` (TB6612).
+Parts and full wiring rules are in `Electronics-Shopping-List.md`. **This car's
+firmware is `esp32_firmware/src/esp32_car_wifi_tb6612.ino`** (TB6612 + WiFi).
 
-### Wiring (L298N — matches `esp32_car.ino`)
+### Wiring (TB6612 — matches `esp32_car_wifi_tb6612.ino`)
 
 ```
-ESP32 GPIO25 ─► ENA   (left PWM)     ESP32 GPIO13 ─► ENB   (right PWM)
-ESP32 GPIO26 ─► IN1                  ESP32 GPIO14 ─► IN3
-ESP32 GPIO27 ─► IN2                  ESP32 GPIO12 ─► IN4
-L298N OUT1/OUT2 ─► left motor        L298N OUT3/OUT4 ─► right motor
-Motor battery (7.4 V 2×18650) ─► L298N 12V / GND
-L298N GND ─► ESP32 GND               (COMMON GROUND — the #1 thing beginners miss)
-ESP32 powered separately from its own USB battery to start.
+TB6612 VM   ─► motor battery + (7.4 V, 2×18650), through your switch
+TB6612 VCC  ─► ESP32 3.3V        (logic reference)
+TB6612 STBY ─► ESP32 GPIO 22     (must be HIGH to enable)
+TB6612 GND  ─► COMMON GROUND     (battery −, ESP32 GND — one star point;
+                                  the #1 thing beginners miss)
+
+Motor A (LEFT):                    Motor B (RIGHT):
+  AIN1 ─► GPIO 18                    BIN1 ─► GPIO 16
+  AIN2 ─► GPIO 19                    BIN2 ─► GPIO 17
+  PWMA ─► GPIO 23                    PWMB ─► GPIO 21
+  AO1/AO2 ─► left motor              BO1/BO2 ─► right motor
+
+ESP32 powered separately from its own USB battery, so motor noise stays off the
+logic supply. 100 nF caps across the motors, bulk cap on VM→GND at the driver.
 ```
-TB6612 (recommended, cooler/efficient): wire per `Electronics-Shopping-List.md`
-and flash `esp32_car_tb6612.ino` instead; the BLE protocol is identical.
 
 ### Flash it
-- **Arduino IDE:** Boards Manager → install "esp32". Open `esp32_car.ino`, select
-  your board, Upload. Serial Monitor @ 115200 should print
-  `BLE robot car ready. Advertising as RobotCar-ESP32.`
-- **PlatformIO:** the `esp32_firmware/platformio.ini` project is set up; `pio run -t upload`.
+1. Fill in `WIFI_SSID` / `WIFI_PASS` at the top of the sketch.
+2. **Arduino IDE:** Boards Manager → install "esp32". Open
+   `esp32_car_wifi_tb6612.ino`, select your board, Upload.
+   **PlatformIO:** `esp32_firmware/platformio.ini` is set up; `pio run -t upload`.
+3. Serial Monitor @ 115200 should print the car's IP and
+   `*** Listening on port 9001`.
 
-### BLE identity (must match the phone)
-- Advertises as **`RobotCar-ESP32`**.
-- Service UUID `6E400001-…`, RX write char `6E400002-…` (Nordic UART layout).
-- These already match `CarController.swift`. Command char accepts WRITE /
-  WRITE_NR of ASCII `L<left>R<right>` (e.g. `L60R-40`).
+> The older `esp32_car.ino` (L298N) and `esp32_car_tb6612.ino` are the **BLE**
+> sketches on different pins. They do not match this car — keep them only as
+> reference for the BLE path.
 
 ---
 
 ## Part 3 — Smoke-test and tune
 
 ### Bench test FIRST (wheels off the ground)
-Prop the chassis so the wheels spin free. Prove BLE + motors before autonomy:
-- Easiest: a generic BLE app ("nRF Connect", "BLE Controller – Arduino ESP32").
-  Connect to `RobotCar-ESP32`, write `L60R60\n` to char `6E400002-…` → both sides
-  forward. Write `L0R0\n` → stop. Write `L60R-60\n` → spins in place.
-- The firmware has a **0.5 s failsafe**: if no command arrives for 500 ms it stops
-  the motors. So the driver must send commands at least ~5×/s (the ROS
-  `motion_controller` publishes at 10 Hz — good).
+Prop the chassis so the wheels spin free. Prove the link + motors before autonomy —
+from any terminal on the same WiFi, using the IP the sketch printed:
+
+```bash
+printf 'L60R60\n'  | nc 192.168.1.xx 9001    # both sides forward
+printf 'L0R0\n'    | nc 192.168.1.xx 9001    # stop
+printf 'L60R-60\n' | nc 192.168.1.xx 9001    # spin in place
+```
+
+The firmware has a **0.5 s failsafe**: no command for 500 ms and it stops. So a
+single `nc` command runs for only half a second — that is correct behaviour, not a
+fault. `motion_controller_node` publishes at 10 Hz, which keeps it fed.
 
 ### Motor direction
-If a wheel spins the wrong way, either swap that motor's two OUT wires, or flip its
-sign in `setMotor` / the `IN1/IN2` order in firmware. Fix this before tuning.
+If a wheel spins the wrong way, either swap that motor's two OUT wires or flip
+`LEFT_DIR` / `RIGHT_DIR` in the sketch. **Fix this before calibrating** — a
+backwards side makes every measurement meaningless.
 
 ### Tuning knobs
 
-**In the ESP32 firmware (`esp32_car.ino`):**
+**In the ESP32 firmware (`esp32_car_wifi_tb6612.ino`):**
 - `PWM_FREQ` 20 kHz (silent) — leave as is.
 - `FAILSAFE_MS` (500) — how long without a command before it stops.
-- `map(mag, 0, 100, 0, 255)` — the speed→duty curve. Cheap TT motors have a
-  **deadband** (don't turn below ~40–50% duty on 6–7 V). If the car stalls at low
-  speeds, raise the floor, e.g. `map(mag, 0, 100, 90, 255)` so speed 1 already
-  overcomes stiction.
+- `LEFT_DIR` / `RIGHT_DIR` — flip a side that runs backwards.
+- Do **not** add a duty floor here for stiction. That is what `drive_deadband` in
+  the calibration is for, and a floor in firmware would fight it.
+
+**Measured, not tuned — `config/calibration.yaml`** (press `c`, see Part 5):
+`turn_sign`, `drive_deadband`, `turn_deadband`, `linear_gain`, `angular_gain`,
+`straightness_trim`, `command_latency`. Delete the file to go back to
+uncalibrated pass-through behaviour.
 
 **In the nav library (`laptop_brain/nav/config.py`) — the driving behavior:**
-- `TURN_SIGN` (**calibrate first**): `+1` means command (left=+s, right=−s) makes
-  heading θ increase. If the car turns the **wrong way** during autonomy, set it to
-  `-1`. One-line fix, decided by watching one turn.
 - `DRIVE_SPEED` (45) — cruise. Keep low indoors; raise for carpet.
 - `TURN_SPEED` (40) — in-place rotation speed.
 - `ARRIVE_DIST` (0.10 m) — how close counts as "reached a waypoint".
@@ -121,13 +133,15 @@ ros2 param set /voxel_mapper_node max_rays 1000
 ros2 param set /motion_controller_node rate_hz 8.0
 ```
 (`nav/config.py` constants need the `nav` lib reloaded — just relaunch, since it's
-an editable install.)
+an editable install. `calibration.yaml` is the exception: it is re-read live when
+calibration writes a new one.)
 
 ### Bring-up order (never all at once)
-1. Wheels off ground → BLE smoke test (`L60R60`) → confirm direction.
+1. Wheels off ground → `nc` smoke test (`L60R60`) → confirm both directions.
 2. Add motor caps + a single **star ground**; retest (motion smooth, ESP32 never resets).
-3. Mount the phone facing forward; drive manually.
-4. Enable autonomy; calibrate `TURN_SIGN` on the first commanded turn.
+3. Mount the phone facing forward; `./run.sh --car <ip>`; confirm `car: connected`.
+4. Car on the floor, ~2×2 m clear → press **c** to calibrate (Part 5).
+5. Press **p** to plan, then **g** to drive. **h**/SPACE stops.
 
 ---
 
@@ -152,49 +166,150 @@ it needs a real TTY, so it can never be part of a launch file:)
 ros2 run autonomous_rc_car_ros motion_enable_node
 ```
 ```
-[HOLD] path:   14 wp | drive:      L0R0   (p=plan  g=go  h/SPACE=hold  q=quit)
+[HOLD] car: connected  | path:    14 wp | drive:      L0R0   (c=calibrate  p=plan  g=go  h/SPACE=hold  q=quit)
 ```
+- **c** — calibrate against the phone's pose (Part 5). HOLDs first, then the car
+  drives itself through the measurement sequence.
 - **p** — compute a fresh path (watch it appear in RViz and the `wp` count update).
 - **g** — GO: the car follows the current path; the `drive:` field shows the live
   `L..R..` command.
-- **h** or **SPACE** — HOLD: commands `L0R0` immediately (SPACE = panic stop).
+- **h** or **SPACE** — HOLD: commands `L0R0` immediately (SPACE = panic stop, and
+  it aborts a running calibration).
 - **q** — quit (also HOLDs).
+
+The `car:` field is the ESP32 link. `disconnected` means nothing you press will
+move the car — check power and `--car <ip>` first.
 
 So you can't miss what it's doing: the console shows the path size and the exact drive
 command in real time, and nothing moves until you press **g**. (Want auto-replanning
 instead? `./run.sh --continuous`; arm at boot with `./run.sh --go`.)
 
-## Part 4 — Getting `/drive` to the car
+## Part 4 — Getting `/drive` to the car (WiFi)
 
-**Recommended (your WiFi ESP32):** drive the ESP32 **directly from the laptop over
-WiFi**. A `car_driver_node` subscribes to `/drive` and forwards each `L..R..` to the
-ESP32's websocket (the same channel your HTML control page uses). The phone stays a
-pure perception sensor; **no BLE and no iOS changes needed**. This is the intended
-path now — tell me your ESP32's websocket command format and I'll write the node.
+The laptop drives the ESP32 **directly over WiFi**. The phone stays a pure
+perception sensor: no BLE, no iOS changes.
 
-**Alternative (BLE via the phone):** if you ever go BLE instead, `bridge_node`
-already relays `/drive` back over the socket as a framed message (type `0x44 'D'`,
-ASCII `L..R..`), but **the iOS app does not yet read it.** `CarController.swift` can
-drive the ESP32, but nothing calls it. Finishing that path needs (plan Tasks 17–18):
+```
+motion_controller_node ──/drive──► car_driver_node ──TCP :9001──► ESP32 ──► motors
+```
 
-1. **Receive** in `PointCloudStreamer.swift`: a read loop on the TCP socket that
-   parses inbound `type(1) + len(u32 LE) + payload` frames; on `0x44`, decode the
-   `L..R..` ASCII.
-2. **Relay**: instantiate a `CarController`, wait for `isConnected`, and on each
-   decoded command call `carController.drive(left:right:)`.
-3. **Safety**: call `carController.stop()` when ARKit tracking degrades or the
-   socket drops (defense-in-depth with the ESP32's 0.5 s failsafe and the PC
-   stale-pose stop).
+### Flash the firmware
 
-**Alternative for testing without the phone relay:** drive the ESP32 **directly
-from the laptop** with Python `bleak` (PC ⇄ BLE ⇄ ESP32), bypassing the phone —
-useful to validate the motion controller against real motors before writing the
-Swift code. The phone then only does perception.
+`esp32_firmware/src/esp32_car_wifi_tb6612.ino`, wired for **your** pins:
+
+| | IN1 | IN2 | PWM |
+|---|---|---|---|
+| Motor A (left) | 18 | 19 | 23 |
+| Motor B (right) | 16 | 17 | 21 |
+
+STBY on **22**. Before flashing, fill in `WIFI_SSID` and `WIFI_PASS` at the top of
+the sketch. On boot the serial monitor (115200) prints:
+
+```
+*** Car IP address: 192.168.1.xx
+*** Listening on port 9001
+```
+
+### Protocol
+
+Raw TCP, one command per line, port 9001:
+
+- `L<left>R<right>\n` — each side −100..100, e.g. `L60R-40\n`; replies `ok\n`
+- `S\n` — immediate stop
+- 500 ms failsafe: no command → motors stop. The laptop sends at 10 Hz.
+
+The firmware is deliberately **dumb** — a linear 0..100 → PWM map and nothing else.
+Deadband, trim and every other per-car quirk live in the calibration file on the
+laptop, so re-calibrating never means reflashing. Don't add compensation to the
+firmware; it would fight the calibration.
+
+### Point the laptop at it
+
+```bash
+./run.sh --car 192.168.1.xx        # or --car rccar.local (mDNS)
+```
+
+The console's `car:` field shows `connected` / `disconnected`. `car_driver_node`
+reconnects on its own and stops the car whenever the socket drops.
+
+### Bench test first
+
+Wheels off the ground, then:
+
+```bash
+printf 'L60R60\n' | nc 192.168.1.xx 9001     # both sides forward
+printf 'L0R0\n'   | nc 192.168.1.xx 9001     # stop
+printf 'L60R-60\n' | nc 192.168.1.xx 9001    # spin in place
+```
+
+If a side runs backwards, flip `LEFT_DIR` / `RIGHT_DIR` in the sketch (or swap that
+motor's two output wires) **before** calibrating.
+
+---
+
+## Part 5 — Calibration (press `c`)
+
+Rather than guessing what a motor unit means, the car measures itself against the
+iPhone's ARKit pose. Put the car on the floor with ~2×2 m clear around it, make
+sure the phone is streaming and the car link says `connected`, then press **c**.
+
+The console switches to `[CAL ]` and shows each stage:
+
+1. **deadband** — ramps up in steps of 2 until the car actually moves, forwards
+   and spinning. Finds the units below which stiction wins.
+2. **turn sign** — spins and watches θ, so the car knows which way it rotates.
+3. **angular gain** — spins at three speeds → rad/s per motor unit.
+4. **straight runs** — three forward runs → m/s per unit, how much it veers, and
+   how long it takes to react to a command.
+5. **verification** — one more straight run with the trim applied.
+
+Results are written to `config/calibration.yaml` and picked up **live** — the
+driver and controller re-read it, no restart:
+
+```yaml
+turn_sign: 1
+drive_deadband: 28         # motor units below which it does not move
+turn_deadband: 24
+linear_gain: 0.0042        # m/s per unit above the deadband
+angular_gain: 0.0135       # rad/s per unit above the deadband
+straightness_trim: -0.03   # +ve strengthens left, weakens right
+command_latency: 0.18      # seconds from command to visible motion
+```
+
+`car_driver_node` applies the deadband and trim to every command; the controller
+uses `turn_sign`, and uses `linear_gain × command_latency` as a lead distance so
+the car stops **on** the waypoint instead of past it.
+
+**Safety.** Calibration cannot run with the wheels off the ground — it measures
+real motion. It aborts on stale pose, a lost car link, a stage timeout, or if the
+car travels further than expected. Press **h** or **SPACE** to abort at any moment.
+While it runs it owns the motors exclusively (`/calibration_active`), so the motion
+controller cannot interfere.
+
+Re-run it after changing wheels, battery voltage, or driving surface.
+
+### If you would rather go BLE
+
+`bridge_node` still relays `/drive` back over the phone socket as a framed message
+(type `0x44 'D'`, ASCII `L..R..`), but the iOS app does not read it —
+`CarController.swift` exists and nothing calls it. That path needs a read loop in
+`PointCloudStreamer.swift` plus a `CarController` relay (plan Tasks 17–18). The
+WiFi path above avoids all of it.
 
 ---
 
 ## Safety layers (once driving)
-1. ESP32 stops if no BLE command for 0.5 s (firmware).
-2. PC should send `L0R0` if pose is stale or tracking ≠ normal.
-3. Phone should `stop()` on tracking loss (Part 4, item 3).
-4. `icp_slam_node` keeps the pose from drifting into the map.
+1. **Firmware failsafe** — the ESP32 stops if no command arrives for 0.5 s, so a
+   crashed laptop, a dropped WiFi link or a killed graph all stop the car.
+2. **Driver-side stop** — `car_driver_node` stops the car when the socket drops,
+   and sends `S` on shutdown.
+3. **HOLD by default** — `motion_controller_node` publishes `L0R0` unless you have
+   pressed `g`; SPACE is the panic stop.
+4. **Exclusive motor ownership** — `/calibration_active` means only one of
+   calibration or the motion controller can command the car at a time.
+5. **Calibration aborts** — stale pose, lost link, stage timeout, or travelling
+   further than expected all stop the sequence.
+6. `icp_slam_node` keeps the pose from drifting into the map.
+
+Not yet wired: a PC-side stop when ARKit tracking degrades (the pose goes stale,
+which the calibration catches, but the driving loop does not check it explicitly).

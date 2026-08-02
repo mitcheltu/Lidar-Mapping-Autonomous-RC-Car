@@ -20,7 +20,23 @@ class WaypointFollower:
     turn_threshold: float = config.TURN_THRESHOLD
     drive_speed: int = config.DRIVE_SPEED
     turn_speed: int = config.TURN_SPEED
+    calibration: object = None         # nav.calibration.Calibration
     _index: int = field(default=0, repr=False)
+
+    def __post_init__(self):
+        if self.calibration is None:
+            self.calibration = config.CALIBRATION
+
+    @property
+    def stop_distance(self):
+        """Arrival radius widened by however far the car coasts before it reacts.
+
+        An uncalibrated car has zero gain and zero latency, so this is just
+        `arrive_dist` until someone has actually measured the hardware.
+        """
+        lead = (self.calibration.linear_gain * self.drive_speed
+                * self.calibration.command_latency)
+        return self.arrive_dist + lead
 
     @property
     def done(self):
@@ -32,9 +48,10 @@ class WaypointFollower:
 
     def update(self, x, z, theta):
         """Current pose -> (left, right) motor command. Call at >= 5 Hz."""
+        stop_dist = self.stop_distance
         while not self.done:
             wx, wz = self.waypoints[self._index]
-            if math.hypot(wx - x, wz - z) < self.arrive_dist:
+            if math.hypot(wx - x, wz - z) < stop_dist:
                 self._index += 1
             else:
                 break
