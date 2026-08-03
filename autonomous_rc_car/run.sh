@@ -107,25 +107,37 @@ reachable() {   # reachable HOST PORT -- 1s TCP connect probe
     timeout 1 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null
 }
 
+# Where the 3D output goes is the single easiest thing to get wrong: connecting
+# to a viewer on Windows opens NO window in WSL, so if you are watching for a
+# WSLg window you will think the mapping is broken when it is merely elsewhere.
+# Say it loudly, every time, and always name the escape hatch.
+announce_viewer() {
+    echo "+--------------------------------------------------------------+"
+    printf '| %-60s |\n' "3D VIEW: $1"
+    printf '| %-60s |\n' "$2"
+    echo "+--------------------------------------------------------------+"
+}
+
 VIZ=false
 if [ "$WANT_VIZ" -eq 1 ]; then
     VIZ=true
     if [ "$FORCE_SPAWN" -eq 1 ]; then
         CONNECT_ADDR=""
-        echo "Rerun: spawning the viewer in WSL (WSLg)."
+        announce_viewer "a Rerun window opening here in WSL (WSLg)." \
+                        "Slower than the Windows viewer, but self-contained."
     elif [ -n "$CONNECT_ADDR" ]; then
-        echo "Rerun: connecting to $CONNECT_ADDR"
+        announce_viewer "the Rerun viewer at $CONNECT_ADDR" \
+                        "No WSL window will open. Use --spawn for one."
     else
         host="$(windows_host)"
         if [ -n "$host" ] && reachable "$host" "$RERUN_PORT"; then
             CONNECT_ADDR="$host:$RERUN_PORT"
-            echo "Rerun: connecting to the Windows viewer at $CONNECT_ADDR"
+            announce_viewer "the Rerun viewer ALREADY RUNNING ON WINDOWS." \
+                            "Look there, not in WSL. Use --spawn for a WSL window."
         else
             CONNECT_ADDR=""
-            echo "Rerun: no viewer answering on ${host:-<unknown>}:$RERUN_PORT --" \
-                 "falling back to a WSLg viewer."
-            echo "       (For the faster path: run 'rerun' on Windows first," \
-                 "then re-run this script.)"
+            announce_viewer "a Rerun window opening here in WSL (WSLg)." \
+                            "Nothing answered on ${host:-?}:$RERUN_PORT, so spawning locally."
         fi
     fi
 fi
@@ -151,14 +163,42 @@ set +u
 source "$WS/install/setup.bash"
 set -u
 
+# --- clear orphaned DDS shared-memory segments -----------------------------
+# Fast DDS leaves a /dev/shm/fastrtps_* segment behind whenever a node is killed
+# rather than shut down cleanly -- which is exactly what the teardown below
+# does. They accumulate, and stale segments advertise participants that no
+# longer exist, so publishers "match" subscribers that never receive anything
+# (seen here as voxel_mapper_node sitting silent while /points looked connected).
+# With no ROS processes running, every one of them is garbage.
+# Two families, and both matter: the segments themselves (fastrtps_<hash>,
+# fastrtps_<hash>_el) and the port semaphores (sem.fastrtps_port<N>_mutex).
+# Stale port mutexes are the ones that wedge discovery, and they survive for
+# days -- so match both patterns, not just the segments.
+if ! pgrep -f 'ros2 launch|_node' >/dev/null 2>&1; then
+    stale="$(find /dev/shm -maxdepth 1 \( -name 'fastrtps_*' -o -name 'sem.fastrtps_*' \) \
+             2>/dev/null | wc -l)"
+    if [ "$stale" -gt 0 ]; then
+        echo "Clearing $stale orphaned DDS shared-memory object(s)."
+        find /dev/shm -maxdepth 1 \( -name 'fastrtps_*' -o -name 'sem.fastrtps_*' \) \
+            -delete 2>/dev/null || true
+    fi
+fi
+
 # --- launch the graph in its own process group so we can kill all of it ----
 LAUNCH_PID=""
 cleanup() {
     if [ -n "$LAUNCH_PID" ] && kill -0 "$LAUNCH_PID" 2>/dev/null; then
         echo
         echo "Shutting the graph down..."
-        kill -TERM "-$LAUNCH_PID" 2>/dev/null
+        # SIGINT first: ROS nodes catch it and shut down cleanly, which releases
+        # their shared-memory segments instead of orphaning them.
+        kill -INT "-$LAUNCH_PID" 2>/dev/null
         for _ in $(seq 1 20); do
+            kill -0 "$LAUNCH_PID" 2>/dev/null || break
+            sleep 0.25
+        done
+        kill -TERM "-$LAUNCH_PID" 2>/dev/null
+        for _ in $(seq 1 8); do
             kill -0 "$LAUNCH_PID" 2>/dev/null || break
             sleep 0.25
         done
@@ -174,22 +214,27 @@ if [ "$WANT_CONSOLE" -eq 1 ] && [ "$VERBOSE" -eq 0 ]; then
     QUIET_LOG=1
 fi
 
+# ros2 launch REJECTS an argument with an empty value ("malformed launch
+# argument 'connect_addr:='") and refuses to start rerun_viz_node. An empty
+# connect_addr is the normal case -- it is how we ask the node to spawn its own
+# viewer -- so the argument has to be omitted entirely rather than passed empty.
+LAUNCH_ARGS=(
+    viz:="$VIZ"
+    continuous:="$CONTINUOUS"
+    start_enabled:="$START_ENABLED"
+    car_host:="$CAR_HOST"
+    car_port:="$CAR_PORT"
+)
+if [ -n "$CONNECT_ADDR" ]; then
+    LAUNCH_ARGS+=( connect_addr:="$CONNECT_ADDR" )
+fi
+
 if [ "$QUIET_LOG" -eq 1 ]; then
     setsid ros2 launch autonomous_rc_car_ros bringup.launch.py \
-        viz:="$VIZ" \
-        connect_addr:="$CONNECT_ADDR" \
-        continuous:="$CONTINUOUS" \
-        start_enabled:="$START_ENABLED" \
-        car_host:="$CAR_HOST" \
-        car_port:="$CAR_PORT" > "$GRAPH_LOG" 2>&1 &
+        "${LAUNCH_ARGS[@]}" > "$GRAPH_LOG" 2>&1 &
 else
     setsid ros2 launch autonomous_rc_car_ros bringup.launch.py \
-        viz:="$VIZ" \
-        connect_addr:="$CONNECT_ADDR" \
-        continuous:="$CONTINUOUS" \
-        start_enabled:="$START_ENABLED" \
-        car_host:="$CAR_HOST" \
-        car_port:="$CAR_PORT" &
+        "${LAUNCH_ARGS[@]}" &
 fi
 LAUNCH_PID=$!
 

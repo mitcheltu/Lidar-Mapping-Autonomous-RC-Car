@@ -16,6 +16,8 @@ All heavy lifting lives in the pip-installed ``nav`` library; this node is a thi
 ROS2 wrapper. Build/run in WSL2 (ROS2 Humble) -- see autonomous_rc_car/ROS2_SETUP.md.
 """
 
+import time
+
 import numpy as np
 
 import rclpy
@@ -58,6 +60,8 @@ class VoxelMapperNode(Node):
         self._voxels = VoxelGrid(voxel_size=self._voxel_size,
                                  max_range=self._p('max_range').double_value)
         self._origin = None   # sensor origin (ARKit world), from latest /pose
+        self._clouds_seen = 0
+        self._clouds_used = 0
 
         self._map_pub = self.create_publisher(OccupancyGrid, '/map', 1)
         self._ground_pub = self.create_publisher(MarkerArray, '/voxels/ground', 1)
@@ -81,18 +85,45 @@ class VoxelMapperNode(Node):
             np.array([[p.x, p.y, p.z]], dtype=np.float32))[0]
 
     def _on_points(self, msg: PointCloud2):
+        # Every early return here used to be silent, which made "no voxels"
+        # impossible to tell apart from "no data". Say why, throttled.
+        self._clouds_seen += 1
         if self._origin is None:
+            self.get_logger().warn(
+                'no voxels: dropping clouds until /pose arrives (is the phone '
+                'streaming pose?)', throttle_duration_sec=5.0)
             return   # need a sensor origin to cast rays
         pts = point_cloud2.read_points(msg, field_names=('x', 'y', 'z'), skip_nans=True)
         xyz = np.array([[p[0], p[1], p[2]] for p in pts], dtype=np.float32)
         if xyz.size == 0:
+            self.get_logger().warn('no voxels: /points decoded to 0 points',
+                                   throttle_duration_sec=5.0)
             return
         xyz = points_ros_to_arkit(xyz)   # ROS z-up -> ARKit y-up for nav
+
+        started = time.perf_counter()
         self._voxels.update(xyz, self._origin, max_rays=self._max_rays)
+        elapsed = time.perf_counter() - started
+        self._clouds_used += 1
+
+        # The phone streams at 5-10 Hz. If a cloud takes longer than that to
+        # integrate, the subscription queue backs up and most frames are
+        # discarded unseen -- worth saying out loud rather than silently lagging.
+        if elapsed > 0.2:
+            self.get_logger().warn(
+                f'voxel integration is too slow to keep up: {elapsed:.2f}s for '
+                f'{xyz.shape[0]} points (max_rays={self._max_rays}). '
+                f'Used {self._clouds_used}/{self._clouds_seen} clouds so far.',
+                throttle_duration_sec=10.0)
 
     def _rebuild(self):
         centers = self._voxels.occupied_centers()   # ARKit y-up voxel centers
         if centers.shape[0] < self._min_voxels:
+            self.get_logger().warn(
+                f'no voxels published: only {centers.shape[0]} occupied, need '
+                f'{self._min_voxels} (min_voxels). Clouds used: '
+                f'{self._clouds_used}/{self._clouds_seen}.',
+                throttle_duration_sec=5.0)
             return
         try:
             floor_y = estimate_floor_height(centers)
