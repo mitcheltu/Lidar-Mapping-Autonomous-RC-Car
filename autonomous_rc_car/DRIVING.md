@@ -168,6 +168,8 @@ ros2 run autonomous_rc_car_ros motion_enable_node
 ```
 [HOLD] car: connected  | path:    14 wp | drive:      L0R0   (c=calibrate  p=plan  g=go  h/SPACE=hold  q=quit)
 ```
+- **s** — scan: the car spins a full circle on the spot with the LiDAR on, then
+  goes back to idle. This is how the map gets built (Part 6).
 - **c** — calibrate against the phone's pose (Part 5). HOLDs first, then the car
   drives itself through the measurement sequence.
 - **p** — compute a fresh path (watch it appear in RViz and the `wp` count update).
@@ -287,6 +289,54 @@ While it runs it owns the motors exclusively (`/calibration_active`), so the mot
 controller cannot interfere.
 
 Re-run it after changing wheels, battery voltage, or driving surface.
+
+---
+
+## Part 6 — On-demand LiDAR (press `s`)
+
+The phone does not stream depth continuously. Depth is the most expensive thing
+it does, so the laptop switches it on only when it will actually use the data.
+
+| Mode | Pose | Depth | When |
+|---|---|---|---|
+| `IDLE` | 10 Hz | off | parked, planning, waiting — the resting state |
+| `SCAN` | 10 Hz | on | during a commanded 360° spin |
+| `DRIVE` | 10 Hz | on | while the car is moving |
+
+The console's `lidar:` field shows the current mode. Pose is *always* streamed —
+the car has to know where it is even with the LiDAR off.
+
+**Press `s`** and `scan_node` runs the sequence: stop → `SCAN` → spin a full
+circle at `SPIN_SPEED`, watching `/pose` until 360° has accumulated → stop →
+`IDLE`. Arming motion (`g`) switches to `DRIVE`; disarming returns to `IDLE`.
+
+Like calibration, the scan takes exclusive ownership of the motors
+(`/scan_active`) so the motion controller cannot fight it, and `h`/SPACE aborts.
+It also aborts on a stale pose or if the spin times out without the car turning —
+which is what you would see if `TURN_SIGN` were wrong or the wheels were off the
+ground.
+
+### Why the phone no longer holds the cloud
+
+It used to accumulate the whole scan in a voxel dictionary capped at 400,000
+cells. That cap had a nasty failure mode: the code that queued points for
+streaming sat inside the same branch that created a cell, so once the cap was
+reached **the phone silently stopped sending new geometry** while still showing
+as connected.
+
+The laptop already maintains a log-odds voxel grid with ray carving, so the
+on-device copy was redundant. The phone now unprojects, subsamples to 2000 points
+per frame, sends, and forgets. Nothing accumulates, so nothing needs a cap — and
+because repeat observations of a surface now reach the laptop, the log-odds grid
+finally gets the confirming evidence it needs to hold a voxel occupied against
+carving.
+
+The per-frame budget is not the old cap in disguise: it bounds what goes on the
+wire in one frame (matched to the mapper's `max_rays`), and retains no state.
+
+> The app must be rebuilt in Xcode for any of this to take effect. Until then it
+> ignores the unknown `MODE` frame and keeps streaming exactly as before, so the
+> laptop side is safe to run against the old app.
 
 ### If you would rather go BLE
 

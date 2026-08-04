@@ -115,6 +115,12 @@ def generate_launch_description():
         ),
         Node(
             package='autonomous_rc_car_ros',
+            executable='scan_node',
+            name='scan_node',
+            output='screen',
+        ),
+        Node(
+            package='autonomous_rc_car_ros',
             executable='rerun_viz_node',
             name='rerun_viz_node',
             output='screen',

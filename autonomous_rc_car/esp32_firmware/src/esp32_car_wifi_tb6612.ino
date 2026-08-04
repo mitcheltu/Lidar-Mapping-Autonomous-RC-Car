@@ -44,8 +44,8 @@
 #include <ESPmDNS.h>
 
 // ===== FILL THESE IN BEFORE FLASHING =====================================
-const char *WIFI_SSID = "YOUR_WIFI_SSID";
-const char *WIFI_PASS = "YOUR_WIFI_PASSWORD";
+const char *WIFI_SSID = "Frontier3760";
+const char *WIFI_PASS = "!Myrouterkeys1!";
 // =========================================================================
 
 const uint16_t CMD_PORT = 9001;

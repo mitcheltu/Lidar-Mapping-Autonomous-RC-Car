@@ -84,3 +84,45 @@ def test_message_type_constants_match_ascii():
     assert MESSAGE_TYPE_POINT_CLOUD == ord("P")
     assert MESSAGE_TYPE_POSE == ord("O")
     assert MESSAGE_TYPE_IMAGE == ord("I")
+
+
+# --- sensor mode (laptop -> phone) ----------------------------------------
+
+def test_mode_packet_roundtrips():
+    from nav.stream_protocol import decode_mode_packet, encode_mode_packet
+    assert decode_mode_packet(encode_mode_packet("SCAN")) == "SCAN"
+
+
+def test_every_defined_mode_survives_the_wire():
+    from nav.stream_protocol import MODES, decode_mode_packet, encode_mode_packet
+    for mode in MODES:
+        assert decode_mode_packet(encode_mode_packet(mode)) == mode
+
+
+def test_mode_is_normalised_to_upper_case():
+    from nav.stream_protocol import decode_mode_packet, encode_mode_packet
+    assert decode_mode_packet(encode_mode_packet("scan")) == "SCAN"
+
+
+def test_unknown_mode_is_rejected_before_it_reaches_the_phone():
+    import pytest as _pytest
+
+    from nav.stream_protocol import encode_mode_packet
+    with _pytest.raises(ValueError):
+        encode_mode_packet("TURBO")
+
+
+def test_mode_packet_uses_its_own_message_type():
+    from nav.stream_protocol import (MESSAGE_TYPE_MODE, encode_mode_packet,
+                                     parse_frame)
+    mtype, _ = parse_frame(encode_mode_packet("IDLE"))
+    assert mtype == MESSAGE_TYPE_MODE
+
+
+def test_decoding_a_non_mode_frame_is_rejected():
+    import numpy as _np
+    import pytest as _pytest
+
+    from nav.stream_protocol import decode_mode_packet, encode_point_cloud_packet
+    with _pytest.raises(ValueError):
+        decode_mode_packet(encode_point_cloud_packet(_np.zeros((1, 3), dtype=_np.float32)))

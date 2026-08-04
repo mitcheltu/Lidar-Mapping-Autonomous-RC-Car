@@ -25,6 +25,7 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import CompressedImage, PointCloud2
@@ -117,12 +118,20 @@ class BridgeNode(Node):
         self._drive_sub = self.create_subscription(
             String, '/drive', self._on_drive, 10
         )
+        # Sensor mode: tells the phone when depth is worth the battery. Latched,
+        # so a phone that connects late still learns the current mode.
+        mode_qos = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
+                              durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self._mode_sub = self.create_subscription(
+            String, '/sensor_mode', self._on_sensor_mode, mode_qos
+        )
 
         # Shared connection handle, guarded by a lock (accessed by both the
         # network thread and the ROS executor thread).
         self._conn_lock = threading.Lock()
         self._conn = None
         self._latest_drive = None
+        self._latest_mode = None    # re-sent when a phone (re)connects
 
         self._server_thread = threading.Thread(
             target=self._serve_forever, daemon=True
@@ -156,6 +165,7 @@ class BridgeNode(Node):
             self.get_logger().info(f'phone connected from {addr}')
             with self._conn_lock:
                 self._conn = conn
+            self._resend_mode()   # a late-joining phone still learns the mode
             try:
                 self._handle_connection(conn)
             except (OSError, ConnectionError) as exc:
@@ -263,6 +273,51 @@ class BridgeNode(Node):
                 self.get_logger().warn(f'failed to send drive command: {exc}')
                 return
         self.get_logger().info(f'relayed drive command: {cmd}')
+
+    # ------------------------------------------------------------------
+    # Sensor mode relay (ROS -> socket)
+    # ------------------------------------------------------------------
+    def _on_sensor_mode(self, msg):
+        """Tell the phone whether depth is wanted (IDLE / SCAN / DRIVE).
+
+        An app that predates this message ignores the unknown frame type and
+        keeps streaming exactly as before, so this is safe to publish always.
+        """
+        try:
+            packet = stream_protocol.encode_mode_packet(msg.data)
+        except ValueError as exc:
+            self.get_logger().warn(f'refusing to send bad sensor mode: {exc}')
+            return
+        self._latest_mode = msg.data.strip().upper()
+        if not self._send_mode(packet):
+            # Not an error: the mode is remembered and re-sent on connect.
+            self.get_logger().info(
+                f'sensor mode {self._latest_mode} queued until the phone connects')
+            return
+        self.get_logger().info(f'sensor mode -> {self._latest_mode}')
+
+    def _send_mode(self, packet):
+        with self._conn_lock:
+            conn = self._conn
+            if conn is None:
+                return False
+            try:
+                conn.sendall(packet)
+            except OSError as exc:
+                self.get_logger().warn(f'failed to send sensor mode: {exc}')
+                return False
+        return True
+
+    def _resend_mode(self):
+        """Push the current mode to a phone that just connected."""
+        if self._latest_mode is None:
+            return
+        try:
+            packet = stream_protocol.encode_mode_packet(self._latest_mode)
+        except ValueError:
+            return
+        if self._send_mode(packet):
+            self.get_logger().info(f'sent sensor mode {self._latest_mode} to the phone')
 
 
 def recvall(conn, n):

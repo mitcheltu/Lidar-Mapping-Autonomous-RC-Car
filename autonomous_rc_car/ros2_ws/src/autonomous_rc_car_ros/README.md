@@ -6,10 +6,10 @@ the mapping / planning / control / SLAM nodes. The heavy algorithms live in the
 pip-installable `nav` library (`autonomous_rc_car/laptop_brain`); the ROS nodes
 are thin wrappers around it.
 
-> All nine nodes are implemented: `bridge_node`, `voxel_mapper_node`,
+> All ten nodes are implemented: `bridge_node`, `voxel_mapper_node`,
 > `frontier_planner_node`, `motion_controller_node`, `icp_slam_node`,
 > `motion_enable_node` (control console), `rerun_viz_node` (visualizer),
-> `car_driver_node` (ESP32 link) and `calibration_node`.
+> `car_driver_node` (ESP32 link), `calibration_node` and `scan_node`.
 
 ## Topic graph
 
@@ -38,6 +38,11 @@ are thin wrappers around it.
   trim) from `nav.config`, reconnects on its own, publishes `/car_link`. Obeys
   `/drive_raw` instead of `/drive` while `/calibration_active` is true, so exactly
   one thing owns the motors at a time.
+- `scan_node` (real): on `/scan_trigger` (the console's `s`), stops the car, puts
+  the phone in SCAN mode via `/sensor_mode`, spins a full circle watching `/pose`
+  (`nav.scan.RotationTracker`), then returns the phone to IDLE. Owns the motors
+  through `/scan_active` + `/drive_raw` while running, and is the sole publisher
+  of `/sensor_mode` (it also sets DRIVE/IDLE from `/motion_enable`).
 - `calibration_node` (real): on `/calibrate_trigger` (the console's `c`), drives a
   scripted sequence and measures it against `/pose` to produce
   `config/calibration.yaml` -- turn sign, deadband, linear/angular gain,
@@ -68,7 +73,7 @@ ros2 launch autonomous_rc_car_ros bringup.launch.py
 ros2 run autonomous_rc_car_ros motion_enable_node   # separate terminal
 ```
 
-`bringup.launch.py` starts eight nodes; `motion_enable_node` is deliberately not one
+`bringup.launch.py` starts nine nodes; `motion_enable_node` is deliberately not one
 of them — it calls `tty.setraw` on stdin, and a launched process gets a pipe rather
 than a TTY. `run.sh` therefore runs it in the foreground of your terminal.
 

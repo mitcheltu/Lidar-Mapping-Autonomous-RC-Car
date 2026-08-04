@@ -8,6 +8,13 @@ little-endian payload length + payload. Message types match the iOS app:
   'P' 0x50 points : uint32 count, then per point  float32 x,y,z + uint8 r,g,b  (15 B/pt)
   'O' 0x4F pose   : 16 float32, the camera 4x4 transform (column-major)
   'I' 0x49 image  : raw JPEG bytes of a downscaled camera frame
+
+Phone -> laptop for those three. The reverse direction carries commands:
+
+  'D' 0x44 drive  : ASCII "L<left>R<right>" (legacy BLE relay path)
+  'M' 0x4D mode   : ASCII "IDLE" | "SCAN" | "DRIVE" -- when the phone should
+                    spend power on depth. Unknown types are ignored by both
+                    ends, so an un-updated app keeps working unchanged.
 """
 
 from __future__ import annotations
@@ -25,13 +32,23 @@ __all__ = [
     "encode_pose_payload", "decode_pose_payload",
     "encode_pose_packet", "decode_pose_packet",
     "encode_image_packet", "decode_image_packet",
+    "MESSAGE_TYPE_MODE", "MODES", "MODE_IDLE", "MODE_SCAN", "MODE_DRIVE",
+    "encode_mode_packet", "decode_mode_packet",
 ]
 
 MESSAGE_TYPE_POINT_CLOUD = 0x50  # 'P'
 MESSAGE_TYPE_POSE = 0x4F         # 'O'
 MESSAGE_TYPE_IMAGE = 0x49        # 'I'
+MESSAGE_TYPE_MODE = 0x4D         # 'M'
 
 POINT_STRIDE = 15                # 12 bytes xyz float32 + 3 bytes rgb uint8
+
+# What the phone should be spending power on. IDLE is the default and the point
+# of the exercise: pose is cheap, unprojecting depth is not.
+MODE_IDLE = "IDLE"    # pose only
+MODE_SCAN = "SCAN"    # depth, during a commanded stationary 360-degree spin
+MODE_DRIVE = "DRIVE"  # depth, while the car is moving
+MODES = (MODE_IDLE, MODE_SCAN, MODE_DRIVE)
 
 
 # --- framing ---------------------------------------------------------------
@@ -139,3 +156,21 @@ def decode_image_packet(buf: bytes) -> bytes:
     if mtype != MESSAGE_TYPE_IMAGE:
         raise ValueError("unexpected message type")
     return payload
+
+
+# --- sensor mode (laptop -> phone) -----------------------------------------
+
+def encode_mode_packet(mode: str) -> bytes:
+    """Frame a sensor mode command. Rejects anything not in MODES rather than
+    letting a typo reach the phone, where it would be silently ignored."""
+    normalised = str(mode).strip().upper()
+    if normalised not in MODES:
+        raise ValueError(f"unknown sensor mode {mode!r}; expected one of {MODES}")
+    return frame(MESSAGE_TYPE_MODE, normalised.encode("ascii"))
+
+
+def decode_mode_packet(buf: bytes) -> str:
+    mtype, payload = parse_frame(buf)
+    if mtype != MESSAGE_TYPE_MODE:
+        raise ValueError("unexpected message type")
+    return payload.decode("ascii").strip().upper()

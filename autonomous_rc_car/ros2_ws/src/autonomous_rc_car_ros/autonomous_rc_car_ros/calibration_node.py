@@ -63,6 +63,10 @@ STRAIGHT_TIME = 1.2
 MAX_UNIT = 70             # never command more than this while calibrating
 RUNAWAY_DIST = 2.5        # meters from a stage's start before we call it a runaway
 POSE_STALE = 0.5          # seconds without a pose before we abort
+# The console disarms motion before triggering, so that disarm arrives just
+# after this starts and looks like the operator hitting stop. Ignore
+# /motion_enable briefly after launch.
+ENABLE_GRACE = 1.5
 
 
 class Aborted(Exception):
@@ -81,6 +85,7 @@ class CalibrationNode(Node):
         self._pose = None            # (stamp, x, z, theta)
         self._abort = threading.Event()
         self._worker = None
+        self._started_at = 0.0
 
         latched = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
                              durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
@@ -121,6 +126,8 @@ class CalibrationNode(Node):
     def _on_enable(self, msg: Bool):
         # h / SPACE in the console means stop, and that includes stopping this.
         if not msg.data and self._running:
+            if time.monotonic() - self._started_at < ENABLE_GRACE:
+                return          # the console's own disarm, not an abort
             self.get_logger().warn('calibration aborted by the operator')
             self._abort.set()
 
@@ -129,6 +136,7 @@ class CalibrationNode(Node):
             self.get_logger().warn('calibration already running')
             return
         self._abort.clear()
+        self._started_at = time.monotonic()
         self._worker = threading.Thread(target=self._run, daemon=True)
         self._worker.start()
 
@@ -139,12 +147,25 @@ class CalibrationNode(Node):
     # --- primitives -------------------------------------------------------
 
     def _status(self, text):
-        self._status_pub.publish(String(data=text))
+        if not rclpy.ok():
+            return
+        try:
+            self._status_pub.publish(String(data=text))
+        except Exception:   # noqa: BLE001 - shutting down
+            pass
 
     def _drive(self, left, right):
         left = max(-MAX_UNIT, min(MAX_UNIT, int(left)))
         right = max(-MAX_UNIT, min(MAX_UNIT, int(right)))
-        self._drive_pub.publish(String(data=f'L{left}R{right}'))
+        # The sequence runs on a worker thread, so a Ctrl-C can tear the rclpy
+        # context down underneath it; publishing then raises and kills the
+        # process with a traceback.
+        if not rclpy.ok():
+            return
+        try:
+            self._drive_pub.publish(String(data=f'L{left}R{right}'))
+        except Exception:   # noqa: BLE001 - shutting down
+            pass
 
     def _stop(self):
         self._drive(0, 0)

@@ -1,88 +1,71 @@
 //
 //  ContentView.swift
-//  PointCloudScanner
+//  RCCarLidarStreamer
 //
-//  UI: live camera + point cloud, a running point count, and Pause / Clear /
-//  Export controls. Export writes a .PLY and hands it to the iOS share sheet
-//  so you can AirDrop / save it to Files.
+//  UI for a phone bolted to a robot: connect to the laptop, then show what the
+//  car is asking of the LiDAR and whether data is actually flowing.
+//
+//  There is deliberately no point count, no Clear and no Export. The phone no
+//  longer accumulates a cloud -- it unprojects, streams and forgets -- so those
+//  controls had nothing left to act on. The map lives on the laptop, where you
+//  can see it in Rerun.
 //
 
 import SwiftUI
 
-final class ScannerModel: ObservableObject {
-    let accumulator = PointCloudAccumulator()
-}
-
 struct ContentView: View {
-    @StateObject private var model = ScannerModel()
     @StateObject private var streamer = PointCloudStreamer()
-    @State private var isScanning = true
-    @State private var pointCount = 0
-    @State private var statusMessage = ""
-    @State private var shareURL: URL?
-    @State private var showShare = false
     @State private var hostIP = ""
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ARDepthView(accumulator: model.accumulator,
-                        streamer: streamer,
-                        isScanning: $isScanning) { count in
-                pointCount = count
-            }
-            .edgesIgnoringSafeArea(.all)
+            ARDepthView(streamer: streamer)
+                .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 10) {
-                Text("\(pointCount) points")
-                    .font(.headline)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
-
-                if !statusMessage.isEmpty {
-                    Text(statusMessage)
+                modeBadge
+                if streamer.mode.wantsDepth {
+                    Text("\(streamer.pointsPerSecond) pts/s")
                         .font(.caption)
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(.ultraThinMaterial, in: Capsule())
                 }
-
-                HStack(spacing: 14) {
-                    Button(isScanning ? "Pause" : "Resume") {
-                        isScanning.toggle()
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Button("Clear") {
-                        model.accumulator.clear()
-                        pointCount = 0
-                        statusMessage = ""
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Export PLY") { export() }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-                }
-                .padding(.bottom, 28)
+                Text("The car controls the LiDAR. Scan with 's' in the laptop console.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
             }
         }
         .overlay(alignment: .top) { connectionBar }
-        .sheet(isPresented: $showShare) {
-            if let url = shareURL {
-                ShareSheet(items: [url])
+    }
+
+    private var modeBadge: some View {
+        let (label, tint): (String, Color) = {
+            switch streamer.mode {
+            case .idle:  return ("LiDAR idle", .gray)
+            case .scan:  return ("SCANNING", .green)
+            case .drive: return ("driving", .blue)
             }
-        }
+        }()
+        return Text(label)
+            .font(.headline)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            .background(tint.opacity(0.85), in: Capsule())
     }
 
     private var connectionBar: some View {
         VStack(spacing: 4) {
             HStack(spacing: 8) {
-                TextField("Computer IP (e.g. 192.168.1.20)", text: $hostIP)
+                TextField("Laptop IP (e.g. 192.168.1.20)", text: $hostIP)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numbersAndPunctuation)
                     .autocorrectionDisabled(true)
                     .textInputAutocapitalization(.never)
                     .frame(maxWidth: 210)
-                Button(streamer.isStreaming ? "Stop" : "Stream") {
+                Button(streamer.isStreaming ? "Stop" : "Connect") {
                     if streamer.isStreaming { streamer.stop() }
                     else { streamer.start(host: hostIP) }
                 }
@@ -100,36 +83,4 @@ struct ContentView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .padding(.top, 12)
     }
-
-    private func export() {
-        isScanning = false
-        statusMessage = "Exporting…"
-        let accumulator = model.accumulator
-        DispatchQueue.global(qos: .userInitiated).async {
-            let points = accumulator.snapshot()
-            let name = "scan-\(Int(Date().timeIntervalSince1970)).ply"
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-            do {
-                try PLYExporter.writePLY(points: points, to: url)
-                DispatchQueue.main.async {
-                    shareURL = url
-                    showShare = true
-                    statusMessage = "Exported \(points.count) points"
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    statusMessage = "Export failed: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-}
-
-/// Thin wrapper around UIActivityViewController for SwiftUI.
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }

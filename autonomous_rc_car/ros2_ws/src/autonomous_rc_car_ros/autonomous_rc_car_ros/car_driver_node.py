@@ -58,6 +58,7 @@ class CarDriverNode(Node):
 
         self._sock = None
         self._calibrating = False
+        self._scanning = False
         self._last_rtt = None
         self._warned = False
 
@@ -68,6 +69,8 @@ class CarDriverNode(Node):
                              durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(Bool, '/calibration_active',
                                  self._on_calibration_active, latched)
+        self.create_subscription(Bool, '/scan_active',
+                                 self._on_scan_active, latched)
         # nav.config caches the calibration per process, so a fresh result has to
         # be re-read here rather than waiting for a restart.
         self.create_subscription(String, '/calibration_result',
@@ -116,12 +119,24 @@ class CarDriverNode(Node):
 
     # --- commands --------------------------------------------------------
 
+    @property
+    def _raw_owner(self):
+        """True while something other than the motion controller owns the car."""
+        return self._calibrating or self._scanning
+
     def _on_calibration_active(self, msg: Bool):
         if msg.data != self._calibrating:
             self.get_logger().info(
                 'calibration has the motors' if msg.data
-                else 'motors returned to the motion controller')
+                else 'calibration released the motors')
         self._calibrating = msg.data
+
+    def _on_scan_active(self, msg: Bool):
+        if msg.data != self._scanning:
+            self.get_logger().info(
+                'scan has the motors' if msg.data
+                else 'scan released the motors')
+        self._scanning = msg.data
 
     def _on_calibration_result(self, msg: String):
         cal = config.reload_calibration()
@@ -130,8 +145,8 @@ class CarDriverNode(Node):
             f'trim {cal.straightness_trim:+.3f}')
 
     def _on_drive(self, msg: String):
-        if self._calibrating:
-            return                       # calibration_node owns the car
+        if self._raw_owner:
+            return                       # calibration or scan owns the car
         command = parse_drive(msg.data)
         if command is None:
             self.get_logger().warn(f'ignoring malformed /drive: {msg.data!r}')
@@ -139,8 +154,8 @@ class CarDriverNode(Node):
         self._send(*config.CALIBRATION.apply(*command))
 
     def _on_drive_raw(self, msg: String):
-        if not self._calibrating:
-            return                       # raw access only during calibration
+        if not self._raw_owner:
+            return                       # raw access only during calibration/scan
         command = parse_drive(msg.data)
         if command is None:
             self.get_logger().warn(f'ignoring malformed /drive_raw: {msg.data!r}')

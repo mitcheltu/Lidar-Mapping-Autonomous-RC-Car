@@ -37,6 +37,7 @@ setup(
             'rerun_viz_node = autonomous_rc_car_ros.rerun_viz_node:main',
             'car_driver_node = autonomous_rc_car_ros.car_driver_node:main',
             'calibration_node = autonomous_rc_car_ros.calibration_node:main',
+            'scan_node = autonomous_rc_car_ros.scan_node:main',
         ],
     },
 )
