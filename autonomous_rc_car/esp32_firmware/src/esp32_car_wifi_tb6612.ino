@@ -46,7 +46,7 @@
 // ===== FILL THESE IN BEFORE FLASHING =====================================
 const char *WIFI_SSID = "Frontier3760";
 const char *WIFI_PASS = "!Myrouterkeys1!";
-// =========================================================================
+// ==========================================1===============================
 
 const uint16_t CMD_PORT = 9001;
 const char *MDNS_NAME = "rccar";        // reachable as rccar.local

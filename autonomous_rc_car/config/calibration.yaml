@@ -1,0 +1,8 @@
+turn_sign: -1
+drive_deadband: 24
+turn_deadband: 32
+linear_gain: 0.002844299800696859
+angular_gain: -0.004163812426508189
+straightness_trim: -0.5
+command_latency: 0.25792166699829977
+calibrated_at: '2026-08-03T10:03:11'
